@@ -1,0 +1,11 @@
+<div class="container">
+    <header>
+        <h1>Agenda</h1>
+    </header>
+    <section>
+        <!-- Formulario de alta -->
+        <formulario-contacto (nuevoContacto)="agregarContacto($event)"></formulario-contacto>
+        <lista-contactos [contactos]="listaContactos" (eliminar)="eliminarContacto($event)">
+        </lista-contactos>
+    </section>
+</div>
