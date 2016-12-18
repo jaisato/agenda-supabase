@@ -1,0 +1,6 @@
+<div *ngIf="contacto">
+    <!-- Nombre contacto -->
+    <h5>{{ contacto.nombre }}</h5>
+    <!-- Boton eliminar contacto -->
+    <button (click)="notificarEliminacion(contacto)">Eliminar contacto</button>
+</div>

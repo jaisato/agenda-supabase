@@ -5,7 +5,9 @@
     <section>
         <!-- Formulario de alta -->
         <formulario-contacto (nuevoContacto)="agregarContacto($event)"></formulario-contacto>
-        <lista-contactos [contactos]="listaContactos" (eliminar)="eliminarContacto($event)">
+        <lista-contactos [contactos]="listaContactos" (contactoSeleccionado)="verDetallesContacto($event)">
         </lista-contactos>
+        <detalles-contacto [contacto]="contactoSeleccionado" (eliminar)="eliminarContacto($event)">
+        </detalles-contacto>
     </section>
 </div>

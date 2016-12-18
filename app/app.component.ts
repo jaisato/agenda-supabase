@@ -8,6 +8,7 @@ import { Contacto } from "./contacto";
 })
 export class AppComponent implements OnInit {
     listaContactos: Contacto[];
+    contactoSeleccionado: Contacto;
     
     constructor(private _contactosService: ContactosService) {}
     
@@ -28,8 +29,18 @@ export class AppComponent implements OnInit {
     }
 
     eliminarContacto(contacto: Contacto): void {
-        this._contactosService
-            .eliminarContacto(contacto)
-            .subscribe(() => this.actualizarListaContactos());
+
+        if(confirm(`¿Estas seguro de eliminar a ${contacto.nombre}?`)) {
+            this._contactosService
+                .eliminarContacto(contacto)
+                .subscribe(() => {
+                    this.contactoSeleccionado = null; 
+                    this.actualizarListaContactos() 
+                });
+        }
+    }
+
+    verDetallesContacto(contacto: Contacto): void {
+        this.contactoSeleccionado = contacto;
     }
 }

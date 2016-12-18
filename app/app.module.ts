@@ -7,6 +7,7 @@ import { AppComponent }  from './app.component';
 import { ContactosService } from "./contactos.service";
 import { ListaContactosComponent } from "./lista-contactos/lista-contactos.component";
 import { FormularioContactoComponent } from "./formulario-contacto/formulario-contacto.component";
+import { DetallesContactoComponent } from "./detalles-contacto/detalles-contacto.component";
 
 @NgModule({
   imports: [ 
@@ -17,7 +18,8 @@ import { FormularioContactoComponent } from "./formulario-contacto/formulario-co
   declarations: [ 
     AppComponent,
     ListaContactosComponent,
-    FormularioContactoComponent 
+    FormularioContactoComponent,
+    DetallesContactoComponent
   ],
   providers: [
     ContactosService
