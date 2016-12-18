@@ -1,16 +1,28 @@
 {
   "contactos": [
     {
-      "nombre": "Elon Musk",
-      "id": 6
+      "id": 9
     },
     {
-      "nombre": "Bill Gates",
-      "id": 7
+      "id": 10
     },
     {
-      "nombre": "Steve Jobs",
-      "id": 8
+      "nombre": "Tim",
+      "apellidos": "Cook",
+      "email": "tim.cook@gmail.com",
+      "telefono": "555-123456",
+      "facebook": "tim.cook",
+      "twitter": "@timcook",
+      "id": 11
+    },
+    {
+      "nombre": "Bill",
+      "apellidos": "Gates",
+      "email": "bill.gates@msn.com",
+      "telefono": "555-123456",
+      "facebook": "bill.gates",
+      "twitter": "@BillGates",
+      "id": 12
     }
   ]
 }

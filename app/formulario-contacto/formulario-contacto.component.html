@@ -1,9 +1,37 @@
-<div>
+<form #formContacto="ngForm" (ngSubmit)="notificarCreacionContacto(formContacto)" novalidate>
     <div>
-        <label for="contact-name">Nombre</label>
-        <input type="text" id="contact-name" placeholder="Ej. Tim Cook" [(ngModel)]="contacto.nombre">
+        <label for="nombre">Nombre</label>
+        <input type="text" id="nombre" ngModel name="nombre" #fieldNombre="ngModel" placeholder="Ej. Tim" required />
+        <div class="msg-error" *ngIf="fieldNombre.touched && fieldNombre.invalid">El nombre es un campo obligatorio</div>
     </div>
+
     <div>
-        <button (click)="notificarCreacionContacto()">Añadir contacto</button>
+        <label for="apellidos">apellidos</label>
+        <input id="apellidos" name="apellidos" #fieldApellidos="ngModel" type="text" placeholder="Ej. Cook" ngModel required>
+        <div class="msg-error" *ngIf="fieldApellidos.touched && fieldApellidos.invalid">El campo apellidos es obligatorio</div>
     </div>
-</div>
+
+    <div>
+        <label for="email">email</label>
+        <input id="email" name="email" type="text" placeholder="Ej. tim.cook@apple.com" ngModel required>
+    </div>
+
+    <div>
+        <label for="telefono">telefono</label>
+        <input id="telefono" name="telefono" type="text" placeholder="Ej. 555-123456" ngModel required>
+    </div>
+
+    <div>
+        <label for="facebook">facebook</label>
+        <input id="facebook" name="facebook" type="text" placeholder="Ej. tim.cook" ngModel required>
+    </div>
+
+    <div>
+        <label for="twitter">twitter</label>
+        <input id="twitter" name="twitter" type="text" placeholder="Ej. @timcook" ngModel required>
+    </div>
+
+    <div>
+        <button type="submit" class="button-primary" [disabled]="formContacto.invalid">Añadir</button>
+    </div>
+</form>

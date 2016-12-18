@@ -1,7 +1,7 @@
 <ul>
     <!-- Con la directiva 'ngFor' iteramos por una colección y replicamos el elemento HTML por cada item en la lista -->
     <li *ngFor="let contacto of contactos" (click)="notificarContactoSeleccionado(contacto)">
-        {{ contacto.nombre }}
+        {{ contacto.nombre }} {{ contacto.apellidos }}
         <!--
         <button (click)="notificarEliminacion(contacto)">Eliminar contacto</button>
         -->

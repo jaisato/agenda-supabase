@@ -3,7 +3,8 @@ import { Contacto }  from "../contacto";
 
 @Component({
     selector: "detalles-contacto",
-    templateUrl: "./app/detalles-contacto/detalles-contacto.component.html"
+    templateUrl: "./app/detalles-contacto/detalles-contacto.component.html",
+    styleUrls: ["./app/detalles-contacto/detalles-contacto.component.css"]
 })
 export class DetallesContactoComponent {
 
@@ -14,5 +15,15 @@ export class DetallesContactoComponent {
     // Usamos 'emit' para notificar eventos.
     notificarEliminacion(contacto: Contacto): void {
         this.eliminar.emit(contacto);
+    }
+
+    @Output() navegarFacebook: EventEmitter<string> = new EventEmitter();
+    notificarNavegacionFacebook(): void {
+        this.navegarFacebook.emit(`https://www.facebook.com/${this.contacto.facebook}`);
+    }
+
+    @Output() navegarTwitter: EventEmitter<string> = new EventEmitter();
+    notificarNavegacionTwitter(): void {
+        this.navegarTwitter.emit(`https://twitter.com/${this.contacto.twitter}`);
     }
 }
