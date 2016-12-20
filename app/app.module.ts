@@ -8,23 +8,36 @@ import { ContactosService } from "./contactos.service";
 import { ListaContactosComponent } from "./lista-contactos/lista-contactos.component";
 import { FormularioContactoComponent } from "./formulario-contacto/formulario-contacto.component";
 import { DetallesContactoComponent } from "./detalles-contacto/detalles-contacto.component";
+import { BarraNavegacionComponent } from "./barra-navegacion/barra-navegacion.component";
+// Routing components
+import { AppRoutingModule } from "./app-routing.module";
+import { MisContactosComponent } from "./mis-contactos/mis-contactos.component";
+import { NuevoContactoComponent } from "./nuevo-contacto/nuevo-contacto.component";
 
 @NgModule({
+  // Dependencias de módulos externos
   imports: [ 
     BrowserModule,
     FormsModule,
-    HttpModule
+    HttpModule,
+    AppRoutingModule
   ],
+  // Components, Pipes & Directives de nuestra Application
   declarations: [ 
     AppComponent,
     ListaContactosComponent,
     FormularioContactoComponent,
-    DetallesContactoComponent
+    DetallesContactoComponent,
+    MisContactosComponent,
+    NuevoContactoComponent,
+    BarraNavegacionComponent
   ],
+  // Servicios de nuestro Aplicacion
   providers: [
     ContactosService
   ],
-  bootstrap: [ 
+  // Componente raiz o de arranque de la Aplicacion
+  bootstrap: [
     AppComponent 
   ]
 })

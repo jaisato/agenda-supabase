@@ -1,0 +1,13 @@
+<div class="row">
+    <!-- lista de contactos -->
+    <div class="six columns">
+        <lista-contactos [contactos]="listaContactos" (contactoSeleccionado)="verDetallesContacto($event)">
+        </lista-contactos>
+    </div>
+    <!-- Detalles del contacto seleccionado -->
+    <div class="six columns">
+        <detalles-contacto [contacto]="contactoSeleccionado" (eliminar)="eliminarContacto($event)" (navegarFacebook)="navegarRuta($event)" (navegarTwitter)="navegarRuta($event)">
+        </detalles-contacto>
+    </div>
+
+</div>

@@ -2,20 +2,10 @@
     <header>
         <h1>Agenda</h1>
     </header>
+    <!-- Barra de navegacion con Rutas -->
+    <barra-navegacion></barra-navegacion>
     <section>
-        <!-- Formulario de alta -->
-        <formulario-contacto (nuevoContacto)="agregarContacto($event)">
-        </formulario-contacto>
-
-        <div class="row">
-            <div class="six columns">
-                <lista-contactos [contactos]="listaContactos" (contactoSeleccionado)="verDetallesContacto($event)">
-                </lista-contactos>
-            </div>
-
-        </div>
-
-        <detalles-contacto [contacto]="contactoSeleccionado" (eliminar)="eliminarContacto($event)" (navegarFacebook)="navegarRuta($event)" (navegarTwitter)="navegarRuta($event)">
-        </detalles-contacto>
+        <!-- Zona Dinamica -->
+        <router-outlet></router-outlet>
     </section>
 </div>
