@@ -14,6 +14,8 @@ import { AppRoutingModule } from "./app-routing.module";
 import { MisContactosComponent } from "./mis-contactos/mis-contactos.component";
 import { NuevoContactoComponent } from "./nuevo-contacto/nuevo-contacto.component";
 
+import { ContactosResolve } from "./contactos-resolve.service";
+
 @NgModule({
   // Dependencias de módulos externos
   imports: [ 
@@ -34,7 +36,8 @@ import { NuevoContactoComponent } from "./nuevo-contacto/nuevo-contacto.componen
   ],
   // Servicios de nuestro Aplicacion
   providers: [
-    ContactosService
+    ContactosService,
+    ContactosResolve
   ],
   // Componente raiz o de arranque de la Aplicacion
   bootstrap: [

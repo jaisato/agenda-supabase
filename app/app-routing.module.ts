@@ -4,13 +4,17 @@ import { NgModule } from "@angular/core";
 // Routing components
 import { MisContactosComponent } from "./mis-contactos/mis-contactos.component";
 import { NuevoContactoComponent } from "./nuevo-contacto/nuevo-contacto.component";
+import { ContactosResolve } from "./contactos-resolve.service";
 
 // Definimos la rutas de nuestra aplicacion
 // Las rutas son pares 'ruta' + 'componente'
 const rutas: Routes = [
     {
         path: "mis-contactos",
-        component: MisContactosComponent
+        component: MisContactosComponent,
+        resolve: {
+            contactos: ContactosResolve
+        }
     },
     {
         path: "nuevo-contacto",

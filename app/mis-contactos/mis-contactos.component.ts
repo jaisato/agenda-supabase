@@ -1,4 +1,6 @@
 import { Component, OnInit } from "@angular/core";
+import { ActivatedRoute } from "@angular/router";
+
 import { ContactosService } from "../contactos.service";
 import { Contacto } from "../contacto";
 
@@ -9,7 +11,9 @@ export class MisContactosComponent implements OnInit {
     listaContactos: Contacto[];
     contactoSeleccionado: Contacto;
     
-    constructor(private _contactosService: ContactosService) {}
+    constructor(
+        private _contactosService: ContactosService,
+        private _activatedRoute: ActivatedRoute) { }
     
     private actualizarListaContactos(): void {
         this._contactosService
@@ -18,7 +22,11 @@ export class MisContactosComponent implements OnInit {
     }
 
     ngOnInit(): void {
-        this.actualizarListaContactos();
+        this._activatedRoute.data.forEach(
+            (data: { contactos: Contacto[] }) => {
+                this.listaContactos = data.contactos;
+            }
+        );
     }
 
     eliminarContacto(contacto: Contacto): void {
@@ -28,7 +36,9 @@ export class MisContactosComponent implements OnInit {
                 .eliminarContacto(contacto)
                 .subscribe(() => {
                     this.contactoSeleccionado = null; 
-                    this.actualizarListaContactos() 
+                    this.listaContactos = this.listaContactos.filter(
+                        (c: Contacto) => c.id !== contacto.id 
+                    );
                 });
         }
     }
