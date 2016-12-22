@@ -16,6 +16,9 @@ import { NuevoContactoComponent } from "./nuevo-contacto/nuevo-contacto.componen
 
 import { ContactosResolve } from "./contactos-resolve.service";
 
+// Pipes
+import { SortContactsPipe } from "./sort-contacts.pipe";
+
 @NgModule({
   // Dependencias de módulos externos
   imports: [ 
@@ -32,7 +35,8 @@ import { ContactosResolve } from "./contactos-resolve.service";
     DetallesContactoComponent,
     MisContactosComponent,
     NuevoContactoComponent,
-    BarraNavegacionComponent
+    BarraNavegacionComponent,
+    SortContactsPipe
   ],
   // Servicios de nuestro Aplicacion
   providers: [

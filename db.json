@@ -32,6 +32,15 @@
       "facebook": "elon.musk",
       "twitter": "@elonmusk",
       "id": 13
+    },
+    {
+      "nombre": "Steve",
+      "apellidos": "Jobs",
+      "email": "steve.jobs@apple.com",
+      "telefono": "303-23032",
+      "facebook": "steve.jobs",
+      "twitter": "@stevejobs",
+      "id": 14
     }
   ]
 }

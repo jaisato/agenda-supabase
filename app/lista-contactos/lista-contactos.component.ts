@@ -15,4 +15,9 @@ export class ListaContactosComponent {
     notificarContactoSeleccionado(contacto: Contacto): void {
         this.contactoSeleccionado.emit(contacto);
     }
+
+    sentidoOrdenacion: string = "asc";
+    cambiarOrden(): void {
+        this.sentidoOrdenacion = (this.sentidoOrdenacion === "asc") ? "desc" : "asc";
+    }
 }
