@@ -9,6 +9,7 @@ import { Contacto } from "./contacto";
 @Injectable()
 export class ContactosService {
 
+    // TODO: In production, use HTTPS and a configurable backend URL
     private _rutaApiContactos: string = "http://localhost:3005/contactos";
 
     constructor(private _http: Http) { }
