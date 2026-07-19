@@ -48,6 +48,6 @@ export class MisContactosComponent implements OnInit {
     }
 
     navegarRuta(ruta: string): void {
-        window.open(ruta, "_blank");
+        window.open(ruta, "_blank", "noopener,noreferrer");
     }
  }
