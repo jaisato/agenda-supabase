@@ -48,6 +48,9 @@ export class MisContactosComponent implements OnInit {
     }
 
     navegarRuta(ruta: string): void {
-        window.open(ruta, "_blank");
+        // noopener/noreferrer prevent the newly opened tab (external site) from
+        // gaining access to `window.opener` and repointing this app's tab
+        // (reverse tabnabbing).
+        window.open(ruta, "_blank", "noopener,noreferrer");
     }
  }
