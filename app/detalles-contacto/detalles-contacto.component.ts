@@ -19,11 +19,20 @@ export class DetallesContactoComponent {
 
     @Output() navegarFacebook: EventEmitter<string> = new EventEmitter();
     notificarNavegacionFacebook(): void {
-        this.navegarFacebook.emit(`https://www.facebook.com/${this.contacto.facebook}`);
+        this.navegarFacebook.emit(`https://www.facebook.com/${this.perfil(this.contacto.facebook)}`);
     }
 
     @Output() navegarTwitter: EventEmitter<string> = new EventEmitter();
     notificarNavegacionTwitter(): void {
-        this.navegarTwitter.emit(`https://twitter.com/${this.contacto.twitter}`);
+        this.navegarTwitter.emit(`https://twitter.com/${this.perfil(this.contacto.twitter)}`);
+    }
+
+    // The handle is free text from the form. Interpolated raw, a value such as
+    // "a?next=..." or "../x" rewrote the query or the path of the URL opened in
+    // the new tab, and a missing handle opened ".../undefined". Encoding keeps
+    // it as a single path segment; the leading "@" is dropped because the
+    // form's own example ("@timcook") includes it.
+    private perfil(handle: string): string {
+        return encodeURIComponent((handle || "").trim().replace(/^@/, ""));
     }
 }

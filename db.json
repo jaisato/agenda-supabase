@@ -1,12 +1,6 @@
 {
   "contactos": [
     {
-      "id": 9
-    },
-    {
-      "id": 10
-    },
-    {
       "nombre": "Tim",
       "apellidos": "Cook",
       "email": "tim.cook@gmail.com",
