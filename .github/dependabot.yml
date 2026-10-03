@@ -1,0 +1,15 @@
+# Dependabot: solo actualizaciones de seguridad (sin PR periódicas de versión) y sin tocar Angular.
+#
+# La aplicación es Angular 2 (2017) con SystemJS, RxJS 5 y TypeScript 2. Las alertas de @angular/*
+# solo tienen parche en Angular 10 o posterior, y subir un paquete suelto (como proponían las PR
+# automáticas de @angular/common y @angular/core a 20.x) no se puede instalar de forma coherente con
+# el resto del árbol. Cerrarlas exige migrar la aplicación entera; hasta entonces se ignoran aquí.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "@angular/*"
