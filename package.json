@@ -42,6 +42,11 @@
     "rimraf": "^2.5.4",
     "typescript": "~2.1.4"
   },
+  "overrides": {
+    "axios": "0.34.0",
+    "send": "0.19.2",
+    "serve-static": "1.16.3"
+  },
   "keywords": [],
   "author": "Jairo ST",
   "license": "MIT"
