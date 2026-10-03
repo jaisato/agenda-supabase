@@ -7,7 +7,7 @@
     "start": "tsc && concurrently \"tsc -w\" \"lite-server\" \"json-server db.json --port 3005\" "
   },
   "dependencies": {
-    "@angular/common": "~2.3.0",
+    "@angular/common": "~20.3.28",
     "@angular/compiler": "~2.3.0",
     "@angular/core": "~2.3.0",
     "@angular/forms": "~2.3.0",
