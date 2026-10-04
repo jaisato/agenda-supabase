@@ -29,6 +29,10 @@ export class ContactosService {
     // HttpClient ya parsea el cuerpo de la respuesta de error en error.error.
     const body = error.error || '';
     const err = body.error || JSON.stringify(body);
+    // statusText está obsoleto: con HTTP/2 o posterior el servidor no envía el texto del estado
+    // y Angular deja «OK» aunque el código no sea 200. Se mantiene para conservar el mensaje que
+    // registraba la versión con @angular/http («500 - Internal Server Error …»): json-server
+    // sirve HTTP/1.1, que sí lo envía.
     const errMsg = `${error.status} - ${error.statusText || ''} ${err}`;
     console.error(errMsg);
     return throwError(() => new Error(errMsg));
