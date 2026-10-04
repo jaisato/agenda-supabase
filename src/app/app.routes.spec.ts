@@ -1,11 +1,10 @@
-import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router, provideRouter, withComponentInputBinding } from '@angular/router';
+import { Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { API_URL } from './api-url.token';
-import { routes } from './app.routes';
+import { appConfig } from './app.config';
 import { Contacto } from './contacto';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
@@ -27,9 +26,10 @@ describe('rutas de la aplicación', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
+      // La configuración real de la aplicación (router con withComponentInputBinding() y
+      // HttpClient), con el backend HTTP de pruebas y la URL de la API sustituidos.
       providers: [
-        provideRouter(routes, withComponentInputBinding()),
-        provideHttpClient(),
+        ...appConfig.providers,
         provideHttpClientTesting(),
         { provide: API_URL, useValue: API },
       ],
