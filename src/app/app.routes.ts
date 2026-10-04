@@ -1,19 +1,18 @@
-import { RouterModule, Routes } from "@angular/router";
-import { NgModule } from "@angular/core";
+import { Routes } from "@angular/router";
 
 // Routing components
 import { MisContactosComponent } from "./mis-contactos/mis-contactos.component";
 import { NuevoContactoComponent } from "./nuevo-contacto/nuevo-contacto.component";
-import { ContactosResolve } from "./contactos-resolve.service";
+import { contactosResolver } from "./contactos.resolver";
 
 // Definimos la rutas de nuestra aplicacion
 // Las rutas son pares 'ruta' + 'componente'
-const rutas: Routes = [
+export const routes: Routes = [
     {
         path: "mis-contactos",
         component: MisContactosComponent,
         resolve: {
-            contactos: ContactosResolve
+            contactos: contactosResolver
         }
     },
     {
@@ -26,11 +25,3 @@ const rutas: Routes = [
         redirectTo: "/mis-contactos"
     }
 ];
-
-@NgModule({
-    // Importamos un nuevo modulo generado a partir de las rutas
-    imports: [RouterModule.forRoot(rutas)],
-    // Exportamos el 'RouterModule' para evitar cargarlo de nuevo en 'AppModule'
-    exports: [RouterModule]
-})
-export class AppRoutingModule { }

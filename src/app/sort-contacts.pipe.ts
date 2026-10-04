@@ -6,7 +6,7 @@ import { Contacto } from "./contacto";
     name: "SortContacts"
 })
 export class SortContactsPipe implements PipeTransform {
-    transform(contactos: Contacto[], orden: string) {
+    transform(contactos: Contacto[] | null | undefined, orden: string): Contacto[] {
         // The list is loaded asynchronously, so the template renders once with
         // `contactos` still undefined - and `undefined.sort()` is a TypeError
         // that takes the whole view down before the data ever arrives.
