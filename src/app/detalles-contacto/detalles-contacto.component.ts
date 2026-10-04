@@ -6,6 +6,9 @@ import { Contacto } from '../contacto';
   selector: 'detalles-contacto',
   templateUrl: './detalles-contacto.component.html',
   styleUrl: './detalles-contacto.component.css',
+  // Los botones de Facebook y Twitter son inline-block y los separa el salto de línea de la
+  // plantilla, como en Angular 2. Desde Angular 6 ese espacio se elimina por defecto.
+  preserveWhitespaces: true,
 })
 export class DetallesContactoComponent {
   readonly contacto = input<Contacto | null>(null);
