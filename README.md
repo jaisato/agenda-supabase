@@ -28,3 +28,13 @@ Esta comprobación valida la compilación; no sustituye las pruebas en navegador
 Angular 2 y varias herramientas de este proyecto tienen dependencias obsoletas y
 avisos de seguridad pendientes. El lockfile no corrige esos avisos: la migración
 del framework y del entorno de desarrollo debe planificarse y probarse aparte.
+
+## Servidor de desarrollo
+
+`npm start` compila, arranca `lite-server` (browser-sync) y `json-server` en el
+puerto 3005. `bs-config.json` hace que browser-sync escuche solo en `localhost`
+y desactiva su panel de control (puerto 3001): por defecto ambos quedaban
+expuestos a toda la red local, sirviendo el proyecto entero (incluido
+`db.json`) y un panel que permite controlar los navegadores conectados. La
+aplicación llama a la API en `http://localhost:3005`, así que desde otra
+máquina tampoco funcionaba.
