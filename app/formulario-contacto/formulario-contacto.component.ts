@@ -12,7 +12,6 @@ export class FormularioContactoComponent {
     @Output() nuevoContacto: EventEmitter<Contacto> = new EventEmitter();
 
     notificarCreacionContacto(form: FormGroup) {
-        console.log(form);
         // emitir el evento de crear contacto
         this.nuevoContacto.emit(form.value as Contacto);
     }

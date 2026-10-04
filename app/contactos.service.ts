@@ -1,6 +1,7 @@
 import { Injectable } from "@angular/core";
 import { Http, Response } from "@angular/http";
 import { Observable } from "rxjs/Observable";
+import "rxjs/add/observable/throw";
 import "rxjs/add/operator/map";
 import "rxjs/add/operator/catch";
 
@@ -18,7 +19,8 @@ export class ContactosService {
             .get(this._rutaApiContactos)
             .map((datos: Response) => {
                 return datos.json() as Contacto[];
-            });
+            })
+            .catch(this.handleError);
     }
 
     agregarContacto(contacto: Contacto): Observable<Contacto> {
@@ -32,16 +34,25 @@ export class ContactosService {
 
     eliminarContacto(contacto: Contacto): Observable<any> {
         return this._http
-            .delete(`${this._rutaApiContactos}/${contacto.id}`);
+            .delete(`${this._rutaApiContactos}/${contacto.id}`)
+            .catch(this.handleError);
     }
 
     private handleError(error: Response | any) {
         // In a real world app, we might use a remote logging infrastructure
         let errMsg: string;
         if (error instanceof Response) {
-            const body = error.json() || '';
-            const err = body.error || JSON.stringify(body);
-            errMsg = `${error.status} - ${error.statusText || ''} ${err}`;
+            // A 404/500 page from a proxy or an empty body is not JSON:
+            // Response.json() would throw a SyntaxError here and the caller
+            // would get that instead of the HTTP status.
+            let err: string;
+            try {
+                const body = error.json() || "";
+                err = body.error || JSON.stringify(body);
+            } catch (e) {
+                err = error.text();
+            }
+            errMsg = `${error.status} - ${error.statusText || ""} ${err}`;
         } else {
             errMsg = error.message ? error.message : error.toString();
         }
