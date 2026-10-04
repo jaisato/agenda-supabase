@@ -1,4 +1,4 @@
-import { provideHttpClient, withFetch } from '@angular/common/http';
+import { provideHttpClient } from '@angular/common/http';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 
@@ -14,6 +14,7 @@ export const appConfig: ApplicationConfig = {
     // withComponentInputBinding() entrega los datos de los resolvers como inputs
     // del componente de la ruta.
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withFetch()),
+    // En Angular 22 HttpClient usa fetch por defecto (withFetch() está obsoleto).
+    provideHttpClient(),
   ],
 };
