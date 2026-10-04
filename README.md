@@ -8,7 +8,8 @@ formulario validado y baja con confirmación. Los datos los sirve
 
 ## Requisitos
 
-- Node.js 24 (versión fijada en `.nvmrc`). Angular 22 admite `^22.22.3 || ^24.15.0`.
+- Node.js 24.21.0, la versión de `.nvmrc` y la que usa el CI. Angular 22 admite
+  `^22.22.3 || ^24.15.0 || >=26.0.0`, el rango que declara `engines` en `package.json`.
 - npm (el que trae Node 24).
 
 ## Puesta en marcha
@@ -21,9 +22,14 @@ npm start
 
 `npm start` lanza con `concurrently` dos procesos y para los dos con Ctrl+C:
 
-- `npm run api`: json-server 0.17.4 en <http://localhost:3005/contactos>. Las altas y bajas se
-  guardan en `db.json`.
+- `npm run api`: la API en <http://localhost:3005/contactos>. Es json-server 0.17.4 usado como
+  módulo desde `server.mjs`, para que solo acepte peticiones CORS de la aplicación
+  (`http://localhost:4200`). Las altas y bajas se guardan en `db.json`.
 - `ng serve`: la aplicación en <http://localhost:4200>.
+
+`npm ci` no ejecuta los scripts de instalación de las dependencias (`ignore-scripts=true` en
+`.npmrc`): ninguna los necesita, porque los binarios de esbuild, lmdb, msgpackr-extract y
+@parcel/watcher llegan precompilados como dependencias opcionales.
 
 ## Scripts
 
@@ -34,6 +40,30 @@ npm start
 | `npm run build`             | Build de producción en `dist/agenda/browser/`.                  |
 | `npm test`                  | Pruebas unitarias con Vitest (en modo _watch_ en una terminal). |
 | `npm test -- --watch=false` | Una sola pasada de las pruebas (lo que ejecuta el CI).          |
+
+## Qué cambió respecto a la versión con Angular 2
+
+La aplicación se comporta igual; cambian el entorno y algunos detalles internos:
+
+- **Puerto.** La aplicación se sirve con `ng serve` en <http://localhost:4200>, no con lite-server
+  en el 3000, y ya no abre el navegador. La API sigue en el 3005.
+- **Arranque.** `npm start` ya no compila con `tsc` ni vigila los cambios con `tsc -w`: lo hace
+  `ng serve`. Desaparecen SystemJS, `systemjs.config.js` y el `index.html` de la raíz (ahora
+  `src/index.html`).
+- **CORS de la API.** La CLI de json-server respondía a cualquier origen, con credenciales, así que
+  cualquier web abierta en el navegador podía leer y modificar `db.json`. `server.mjs` solo
+  acepta el origen de `ng serve`. Si cambias su puerto, cambia también `ORIGEN_PERMITIDO`.
+- **Consola.** `FormularioContactoComponent` ya no vuelca el formulario con `console.log` al dar
+  de alta un contacto. Los errores del alta se siguen registrando con `console.error`, con el
+  mismo mensaje.
+- **Código retirado.** `actualizarListaContactos()`, que nadie llamaba.
+- **Modelo.** `Contacto` pasa de clase a interfaz, con `id?: number` (antes `id: Number`): lo
+  asigna json-server y el formulario no lo envía.
+- **Errores del alta.** `agregarContacto()` propaga un `Error` con el mensaje, en lugar de la
+  cadena sola.
+- **Espacios en blanco.** Angular 6 dejó de conservar por defecto los espacios entre elementos de
+  las plantillas. La barra de navegación y los botones de Facebook y Twitter usan
+  `preserveWhitespaces: true` para mantener la separación de antes entre pestañas e iconos.
 
 ## Estructura
 
@@ -60,4 +90,5 @@ Los estilos globales (skeleton-css y Font Awesome 4.7) se declaran en `angular.j
   `_order`, `q`).
 - Dependabot propone cada semana las actualizaciones de npm (todo `@angular/*` en una sola PR) y
   cada mes las de las acciones de GitHub. Las versiones mayores de Angular se hacen con
-  `ng update`, que también aplica las migraciones de código.
+  `ng update`, que también aplica las migraciones de código. Por eso Dependabot tampoco propone
+  las mayores de vitest, tslib y rxjs, que se salen de los peer de Angular 22.
