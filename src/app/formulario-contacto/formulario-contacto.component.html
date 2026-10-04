@@ -1,0 +1,97 @@
+<div class="row">
+  <div class="offset-by-three six columns">
+    <form #formContacto="ngForm" (ngSubmit)="notificarCreacionContacto(formContacto)" novalidate>
+      <div>
+        <label for="nombre">Nombre</label>
+        <input
+          class="u-full-width"
+          type="text"
+          id="nombre"
+          ngModel
+          name="nombre"
+          #fieldNombre="ngModel"
+          placeholder="Ej. Tim"
+          required
+        />
+        @if (fieldNombre.touched && fieldNombre.invalid) {
+          <div class="msg-error">El nombre es un campo obligatorio</div>
+        }
+      </div>
+
+      <div>
+        <label for="apellidos">Apellidos</label>
+        <input
+          class="u-full-width"
+          id="apellidos"
+          name="apellidos"
+          #fieldApellidos="ngModel"
+          type="text"
+          placeholder="Ej. Cook"
+          ngModel
+          required
+        />
+        @if (fieldApellidos.touched && fieldApellidos.invalid) {
+          <div class="msg-error">El campo apellidos es obligatorio</div>
+        }
+      </div>
+
+      <div>
+        <label for="email">Email</label>
+        <input
+          class="u-full-width"
+          id="email"
+          name="email"
+          type="text"
+          placeholder="Ej. tim.cook@apple.com"
+          ngModel
+          required
+        />
+      </div>
+
+      <div>
+        <label for="telefono">Teléfono</label>
+        <input
+          class="u-full-width"
+          id="telefono"
+          name="telefono"
+          type="text"
+          placeholder="Ej. 555-123456"
+          ngModel
+          required
+        />
+      </div>
+
+      <div>
+        <label for="facebook">Facebook</label>
+        <input
+          class="u-full-width"
+          id="facebook"
+          name="facebook"
+          type="text"
+          placeholder="Ej. tim.cook"
+          ngModel
+          required
+        />
+      </div>
+
+      <div>
+        <label for="twitter">Twitter</label>
+        <input
+          class="u-full-width"
+          id="twitter"
+          name="twitter"
+          type="text"
+          placeholder="Ej. @timcook"
+          ngModel
+          required
+        />
+      </div>
+
+      <div>
+        <button type="submit" class="button-primary u-full-width" [disabled]="formContacto.invalid">
+          Añadir
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
