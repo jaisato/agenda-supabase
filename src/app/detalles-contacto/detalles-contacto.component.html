@@ -1,4 +1,4 @@
-@if (contacto) {
+@if (contacto(); as contacto) {
   <div>
     <!-- Nombre contacto -->
     <h5>{{ contacto.nombre }} {{ contacto.apellidos }}</h5>

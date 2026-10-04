@@ -7,15 +7,8 @@ import { Contacto } from './contacto';
 
 @Injectable({ providedIn: 'root' })
 export class ContactosService {
-  private _http = inject(HttpClient);
-
-  private readonly _rutaApiContactos: string;
-
-  constructor() {
-    const apiUrl = inject(API_URL);
-
-    this._rutaApiContactos = `${apiUrl}/contactos`;
-  }
+  private readonly _http = inject(HttpClient);
+  private readonly _rutaApiContactos = `${inject(API_URL)}/contactos`;
 
   obtenerContactos(): Observable<Contacto[]> {
     return this._http.get<Contacto[]>(this._rutaApiContactos);

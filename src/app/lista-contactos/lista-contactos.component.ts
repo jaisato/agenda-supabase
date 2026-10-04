@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
 
 import { Contacto } from '../contacto';
 import { SortContactsPipe } from '../sort-contacts.pipe';
@@ -10,7 +10,7 @@ import { SortContactsPipe } from '../sort-contacts.pipe';
   styleUrl: './lista-contactos.component.css',
 })
 export class ListaContactosComponent {
-  // Usamos el decorador 'Input' para enlazar datos de entrada.
+  // Usamos la función 'input' para enlazar datos de entrada.
   readonly contactos = input<Contacto[]>([]);
 
   readonly contactoSeleccionado = output<Contacto>();
@@ -18,8 +18,8 @@ export class ListaContactosComponent {
     this.contactoSeleccionado.emit(contacto);
   }
 
-  sentidoOrdenacion: string = 'asc';
+  protected readonly sentidoOrdenacion = signal<'asc' | 'desc'>('asc');
   cambiarOrden(): void {
-    this.sentidoOrdenacion = this.sentidoOrdenacion === 'asc' ? 'desc' : 'asc';
+    this.sentidoOrdenacion.update((sentido) => (sentido === 'asc' ? 'desc' : 'asc'));
   }
 }

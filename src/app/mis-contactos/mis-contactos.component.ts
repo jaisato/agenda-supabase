@@ -1,4 +1,4 @@
-import { Component, input, linkedSignal, signal, inject } from '@angular/core';
+import { Component, inject, input, linkedSignal, signal } from '@angular/core';
 
 import { ContactosService } from '../contactos.service';
 import { Contacto } from '../contacto';
@@ -10,7 +10,7 @@ import { ListaContactosComponent } from '../lista-contactos/lista-contactos.comp
   templateUrl: './mis-contactos.component.html',
 })
 export class MisContactosComponent {
-  private _contactosService = inject(ContactosService);
+  private readonly _contactosService = inject(ContactosService);
 
   // Datos del resolver de la ruta (contactosResolver), que withComponentInputBinding()
   // entrega como input.

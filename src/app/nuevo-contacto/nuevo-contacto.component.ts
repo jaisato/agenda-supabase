@@ -10,8 +10,8 @@ import { FormularioContactoComponent } from '../formulario-contacto/formulario-c
   templateUrl: './nuevo-contacto.component.html',
 })
 export class NuevoContactoComponent {
-  private _router = inject(Router);
-  private _contactosService = inject(ContactosService);
+  private readonly _router = inject(Router);
+  private readonly _contactosService = inject(ContactosService);
 
   agregarContacto(contacto: Contacto): void {
     this._contactosService.agregarContacto(contacto).subscribe({

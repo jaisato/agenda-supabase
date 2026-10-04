@@ -1,17 +1,16 @@
-import { Component, Input, output } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 
 import { Contacto } from '../contacto';
 
 @Component({
   selector: 'detalles-contacto',
-  imports: [],
   templateUrl: './detalles-contacto.component.html',
   styleUrl: './detalles-contacto.component.css',
 })
 export class DetallesContactoComponent {
-  @Input() contacto: Contacto | null = null;
+  readonly contacto = input<Contacto | null>(null);
 
-  // Usamos el decorador 'Output' para notificar datos de salida.
+  // Usamos la función 'output' para notificar datos de salida.
   readonly eliminar = output<Contacto>();
   // Usamos 'emit' para notificar eventos.
   notificarEliminacion(contacto: Contacto): void {
@@ -20,15 +19,17 @@ export class DetallesContactoComponent {
 
   readonly navegarFacebook = output<string>();
   notificarNavegacionFacebook(): void {
-    if (this.contacto) {
-      this.navegarFacebook.emit(`https://www.facebook.com/${this.perfil(this.contacto.facebook)}`);
+    const contacto = this.contacto();
+    if (contacto) {
+      this.navegarFacebook.emit(`https://www.facebook.com/${this.perfil(contacto.facebook)}`);
     }
   }
 
   readonly navegarTwitter = output<string>();
   notificarNavegacionTwitter(): void {
-    if (this.contacto) {
-      this.navegarTwitter.emit(`https://twitter.com/${this.perfil(this.contacto.twitter)}`);
+    const contacto = this.contacto();
+    if (contacto) {
+      this.navegarTwitter.emit(`https://twitter.com/${this.perfil(contacto.twitter)}`);
     }
   }
 
