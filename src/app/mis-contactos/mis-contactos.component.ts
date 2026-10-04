@@ -1,4 +1,4 @@
-import { Component, input, linkedSignal, signal } from '@angular/core';
+import { Component, input, linkedSignal, signal, inject } from '@angular/core';
 
 import { ContactosService } from '../contactos.service';
 import { Contacto } from '../contacto';
@@ -10,6 +10,8 @@ import { ListaContactosComponent } from '../lista-contactos/lista-contactos.comp
   templateUrl: './mis-contactos.component.html',
 })
 export class MisContactosComponent {
+  private _contactosService = inject(ContactosService);
+
   // Datos del resolver de la ruta (contactosResolver), que withComponentInputBinding()
   // entrega como input.
   readonly contactos = input.required<Contacto[]>();
@@ -18,8 +20,6 @@ export class MisContactosComponent {
   // que sea un signal. La lista parte de la del resolver y se actualiza al eliminar.
   protected readonly listaContactos = linkedSignal(() => this.contactos());
   protected readonly contactoSeleccionado = signal<Contacto | null>(null);
-
-  constructor(private _contactosService: ContactosService) {}
 
   eliminarContacto(contacto: Contacto): void {
     if (confirm(`¿Estas seguro de eliminar a ${contacto.nombre}?`)) {

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { Contacto } from '../contacto';
@@ -10,10 +10,8 @@ import { FormularioContactoComponent } from '../formulario-contacto/formulario-c
   templateUrl: './nuevo-contacto.component.html',
 })
 export class NuevoContactoComponent {
-  constructor(
-    private _router: Router,
-    private _contactosService: ContactosService,
-  ) {}
+  private _router = inject(Router);
+  private _contactosService = inject(ContactosService);
 
   agregarContacto(contacto: Contacto): void {
     this._contactosService.agregarContacto(contacto).subscribe({

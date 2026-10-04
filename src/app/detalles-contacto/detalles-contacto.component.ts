@@ -1,10 +1,10 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { NgIf } from '@angular/common';
+import { Component, Input, output } from '@angular/core';
+
 import { Contacto } from '../contacto';
 
 @Component({
   selector: 'detalles-contacto',
-  imports: [NgIf],
+  imports: [],
   templateUrl: './detalles-contacto.component.html',
   styleUrl: './detalles-contacto.component.css',
 })
@@ -12,20 +12,20 @@ export class DetallesContactoComponent {
   @Input() contacto: Contacto | null = null;
 
   // Usamos el decorador 'Output' para notificar datos de salida.
-  @Output() eliminar: EventEmitter<Contacto> = new EventEmitter();
+  readonly eliminar = output<Contacto>();
   // Usamos 'emit' para notificar eventos.
   notificarEliminacion(contacto: Contacto): void {
     this.eliminar.emit(contacto);
   }
 
-  @Output() navegarFacebook: EventEmitter<string> = new EventEmitter();
+  readonly navegarFacebook = output<string>();
   notificarNavegacionFacebook(): void {
     if (this.contacto) {
       this.navegarFacebook.emit(`https://www.facebook.com/${this.perfil(this.contacto.facebook)}`);
     }
   }
 
-  @Output() navegarTwitter: EventEmitter<string> = new EventEmitter();
+  readonly navegarTwitter = output<string>();
   notificarNavegacionTwitter(): void {
     if (this.contacto) {
       this.navegarTwitter.emit(`https://twitter.com/${this.perfil(this.contacto.twitter)}`);

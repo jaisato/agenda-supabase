@@ -2,7 +2,7 @@
 <button class="icono" (click)="cambiarOrden()">
   <i
     class="fa"
-    [ngClass]="{
+    [class]="{
       'fa-sort-alpha-asc': sentidoOrdenacion !== 'asc',
       'fa-sort-alpha-desc': sentidoOrdenacion === 'asc',
     }"
@@ -11,13 +11,12 @@
 </button>
 <ul>
   <!-- Con la directiva 'ngFor' iteramos por una colección y replicamos el elemento HTML por cada item en la lista -->
-  <li
-    *ngFor="let contacto of contactos | SortContacts: sentidoOrdenacion"
-    (click)="notificarContactoSeleccionado(contacto)"
-  >
-    {{ contacto.nombre }} {{ contacto.apellidos }}
-    <!--
-        <button (click)="notificarEliminacion(contacto)">Eliminar contacto</button>
-        -->
-  </li>
+  @for (contacto of contactos() | SortContacts: sentidoOrdenacion; track contacto) {
+    <li (click)="notificarContactoSeleccionado(contacto)">
+      {{ contacto.nombre }} {{ contacto.apellidos }}
+      <!--
+      <button (click)="notificarEliminacion(contacto)">Eliminar contacto</button>
+      -->
+    </li>
+  }
 </ul>

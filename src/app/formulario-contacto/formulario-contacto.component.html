@@ -13,9 +13,9 @@
           placeholder="Ej. Tim"
           required
         />
-        <div class="msg-error" *ngIf="fieldNombre.touched && fieldNombre.invalid">
-          El nombre es un campo obligatorio
-        </div>
+        @if (fieldNombre.touched && fieldNombre.invalid) {
+          <div class="msg-error">El nombre es un campo obligatorio</div>
+        }
       </div>
 
       <div>
@@ -30,9 +30,9 @@
           ngModel
           required
         />
-        <div class="msg-error" *ngIf="fieldApellidos.touched && fieldApellidos.invalid">
-          El campo apellidos es obligatorio
-        </div>
+        @if (fieldApellidos.touched && fieldApellidos.invalid) {
+          <div class="msg-error">El campo apellidos es obligatorio</div>
+        }
       </div>
 
       <div>

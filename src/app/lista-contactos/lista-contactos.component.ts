@@ -1,19 +1,19 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { NgClass, NgFor } from '@angular/common';
+import { Component, input, output } from '@angular/core';
+
 import { Contacto } from '../contacto';
 import { SortContactsPipe } from '../sort-contacts.pipe';
 
 @Component({
   selector: 'lista-contactos',
-  imports: [NgClass, NgFor, SortContactsPipe],
+  imports: [SortContactsPipe],
   templateUrl: './lista-contactos.component.html',
   styleUrl: './lista-contactos.component.css',
 })
 export class ListaContactosComponent {
   // Usamos el decorador 'Input' para enlazar datos de entrada.
-  @Input() contactos: Contacto[] = [];
+  readonly contactos = input<Contacto[]>([]);
 
-  @Output() contactoSeleccionado: EventEmitter<Contacto> = new EventEmitter();
+  readonly contactoSeleccionado = output<Contacto>();
   notificarContactoSeleccionado(contacto: Contacto): void {
     this.contactoSeleccionado.emit(contacto);
   }

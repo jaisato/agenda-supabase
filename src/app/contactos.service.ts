@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 
@@ -7,12 +7,13 @@ import { Contacto } from './contacto';
 
 @Injectable({ providedIn: 'root' })
 export class ContactosService {
+  private _http = inject(HttpClient);
+
   private readonly _rutaApiContactos: string;
 
-  constructor(
-    private _http: HttpClient,
-    @Inject(API_URL) apiUrl: string,
-  ) {
+  constructor() {
+    const apiUrl = inject(API_URL);
+
     this._rutaApiContactos = `${apiUrl}/contactos`;
   }
 

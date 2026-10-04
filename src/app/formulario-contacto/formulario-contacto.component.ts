@@ -1,16 +1,16 @@
-import { Component, Output, EventEmitter } from '@angular/core';
-import { NgIf } from '@angular/common';
+import { Component, output } from '@angular/core';
+
 import { FormsModule, NgForm } from '@angular/forms';
 import { Contacto } from '../contacto';
 
 @Component({
   selector: 'formulario-contacto',
-  imports: [FormsModule, NgIf],
+  imports: [FormsModule],
   templateUrl: './formulario-contacto.component.html',
   styleUrl: './formulario-contacto.component.css',
 })
 export class FormularioContactoComponent {
-  @Output() nuevoContacto: EventEmitter<Contacto> = new EventEmitter();
+  readonly nuevoContacto = output<Contacto>();
 
   // '#formContacto="ngForm"' es un NgForm (formulario dirigido por plantilla), no un FormGroup.
   notificarCreacionContacto(form: NgForm) {
