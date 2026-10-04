@@ -1,15 +1,26 @@
-# Dependabot: solo actualizaciones de seguridad (sin PR periódicas de versión) y sin tocar Angular.
+# Dependabot: npm cada semana (con todo @angular/* en una sola PR) y las acciones de GitHub cada mes.
 #
-# La aplicación es Angular 2 (2017) con SystemJS, RxJS 5 y TypeScript 2. Las alertas de @angular/*
-# solo tienen parche en Angular 10 o posterior, y subir un paquete suelto (como proponían las PR
-# automáticas de @angular/common y @angular/core a 20.x) no se puede instalar de forma coherente con
-# el resto del árbol. Cerrarlas exige migrar la aplicación entera; hasta entonces se ignoran aquí.
+# - Las versiones mayores de Angular no llegan por aquí: se hacen con `ng update`, que además
+#   ejecuta las migraciones de código.
+# - TypeScript solo recibe parches: cada versión de Angular admite un rango menor concreto
+#   (Angular 22 exige `>=6.0 <6.1`), así que las menores llegan junto con `ng update`.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 0
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
     ignore:
       - dependency-name: "@angular/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
