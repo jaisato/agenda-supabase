@@ -1,44 +1,43 @@
-import { Component, Input, Output, EventEmitter } from "@angular/core";
-import { NgIf } from "@angular/common";
-import { Contacto }  from "../contacto";
+import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { NgIf } from '@angular/common';
+import { Contacto } from '../contacto';
 
 @Component({
-    selector: "detalles-contacto",
-    imports: [NgIf],
-    templateUrl: "./detalles-contacto.component.html",
-    styleUrl: "./detalles-contacto.component.css"
+  selector: 'detalles-contacto',
+  imports: [NgIf],
+  templateUrl: './detalles-contacto.component.html',
+  styleUrl: './detalles-contacto.component.css',
 })
 export class DetallesContactoComponent {
+  @Input() contacto: Contacto | null = null;
 
-    @Input() contacto: Contacto | null = null;
+  // Usamos el decorador 'Output' para notificar datos de salida.
+  @Output() eliminar: EventEmitter<Contacto> = new EventEmitter();
+  // Usamos 'emit' para notificar eventos.
+  notificarEliminacion(contacto: Contacto): void {
+    this.eliminar.emit(contacto);
+  }
 
-    // Usamos el decorador 'Output' para notificar datos de salida.
-    @Output() eliminar: EventEmitter<Contacto> = new EventEmitter();
-    // Usamos 'emit' para notificar eventos.
-    notificarEliminacion(contacto: Contacto): void {
-        this.eliminar.emit(contacto);
+  @Output() navegarFacebook: EventEmitter<string> = new EventEmitter();
+  notificarNavegacionFacebook(): void {
+    if (this.contacto) {
+      this.navegarFacebook.emit(`https://www.facebook.com/${this.perfil(this.contacto.facebook)}`);
     }
+  }
 
-    @Output() navegarFacebook: EventEmitter<string> = new EventEmitter();
-    notificarNavegacionFacebook(): void {
-        if (this.contacto) {
-            this.navegarFacebook.emit(`https://www.facebook.com/${this.perfil(this.contacto.facebook)}`);
-        }
+  @Output() navegarTwitter: EventEmitter<string> = new EventEmitter();
+  notificarNavegacionTwitter(): void {
+    if (this.contacto) {
+      this.navegarTwitter.emit(`https://twitter.com/${this.perfil(this.contacto.twitter)}`);
     }
+  }
 
-    @Output() navegarTwitter: EventEmitter<string> = new EventEmitter();
-    notificarNavegacionTwitter(): void {
-        if (this.contacto) {
-            this.navegarTwitter.emit(`https://twitter.com/${this.perfil(this.contacto.twitter)}`);
-        }
-    }
-
-    // The handle is free text from the form. Interpolated raw, a value such as
-    // "a?next=..." or "../x" rewrote the query or the path of the URL opened in
-    // the new tab, and a missing handle opened ".../undefined". Encoding keeps
-    // it as a single path segment; the leading "@" is dropped because the
-    // form's own example ("@timcook") includes it.
-    private perfil(handle: string): string {
-        return encodeURIComponent((handle || "").trim().replace(/^@/, ""));
-    }
+  // The handle is free text from the form. Interpolated raw, a value such as
+  // "a?next=..." or "../x" rewrote the query or the path of the URL opened in
+  // the new tab, and a missing handle opened ".../undefined". Encoding keeps
+  // it as a single path segment; the leading "@" is dropped because the
+  // form's own example ("@timcook") includes it.
+  private perfil(handle: string): string {
+    return encodeURIComponent((handle || '').trim().replace(/^@/, ''));
+  }
 }
