@@ -99,6 +99,11 @@ create trigger marcar_actualizado before update on public.contactos
 -- que se revoca en todas las funciones y solo authenticated ejecuta las tres que usan las políticas.
 -- Las dos funciones de trigger no necesitan grant: Postgres comprueba EXECUTE al crear el trigger,
 -- no al dispararlo.
+--
+-- Esto no cubre las funciones que se añadan después. Un alter default privileges in schema privado
+-- no quita el EXECUTE de public: los privilegios por defecto de un esquema se suman a los globales,
+-- no los restan. Cada función nueva de privado necesita, pues, su propio revoke, y 01_esquema.sql
+-- falla si alguna conserva el EXECUTE de public.
 
 revoke execute on all functions in schema privado from public;
 grant execute on function privado.es_propietario(uuid), privado.rol_compartido(uuid),

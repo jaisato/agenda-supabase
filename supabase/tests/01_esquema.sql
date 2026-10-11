@@ -7,7 +7,7 @@
 -- como (tabla, descripción) y busca una tabla llamada «public».
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(42);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -68,6 +68,40 @@ select column_privs_are('public', 'perfiles', 'nombre', 'authenticated',
   array['SELECT', 'UPDATE'], 'authenticated actualiza perfiles.nombre');
 select column_privs_are('public', 'perfiles', 'email', 'authenticated',
   array['SELECT'], 'authenticated no actualiza perfiles.email');
+
+-- EXECUTE de las funciones de privado (§5.2). Postgres lo concede a public por defecto y la migración
+-- lo revoca; function_privs_are cuenta también lo heredado de public, así que «anon sin privilegios»
+-- comprueba que public ya no ejecuta las funciones. Las tres de las políticas las ejecuta
+-- authenticated; las de trigger no las ejecuta nadie, porque Postgres comprueba EXECUTE al crear el
+-- trigger y no al dispararlo.
+select function_privs_are('privado', 'es_propietario', array['uuid'], 'anon', '{}'::text[],
+  'anon no ejecuta privado.es_propietario(uuid)');
+select function_privs_are('privado', 'rol_compartido', array['uuid'], 'anon', '{}'::text[],
+  'anon no ejecuta privado.rol_compartido(uuid)');
+select function_privs_are('privado', 'es_contraparte', array['uuid'], 'anon', '{}'::text[],
+  'anon no ejecuta privado.es_contraparte(uuid)');
+select function_privs_are('privado', 'es_propietario', array['uuid'], 'authenticated',
+  array['EXECUTE'], 'authenticated ejecuta privado.es_propietario(uuid)');
+select function_privs_are('privado', 'rol_compartido', array['uuid'], 'authenticated',
+  array['EXECUTE'], 'authenticated ejecuta privado.rol_compartido(uuid)');
+select function_privs_are('privado', 'es_contraparte', array['uuid'], 'authenticated',
+  array['EXECUTE'], 'authenticated ejecuta privado.es_contraparte(uuid)');
+select function_privs_are('privado', 'crear_perfil', '{}'::name[], 'authenticated', '{}'::text[],
+  'authenticated no ejecuta privado.crear_perfil()');
+select function_privs_are('privado', 'marcar_actualizado', '{}'::name[], 'authenticated',
+  '{}'::text[], 'authenticated no ejecuta privado.marcar_actualizado()');
+
+-- Ninguna función de privado, presente o futura, conserva el EXECUTE de public. Un alter default
+-- privileges in schema privado no lo evita (ver la migración): esta aserción es la red de seguridad,
+-- y una función nueva sin su revoke la hace fallar.
+select is_empty(
+  $$select p.oid::regprocedure::text
+    from pg_proc p
+    where p.pronamespace = 'privado'::regnamespace
+      and exists (select 1
+                  from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                  where a.grantee = 0 and a.privilege_type = 'EXECUTE')$$,
+  'ninguna función de privado es ejecutable por public');
 
 -- El trigger crear_perfil copia el usuario nuevo de auth.users a perfiles
 select pruebas.crear_usuario('a@test.local');
