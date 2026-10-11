@@ -90,7 +90,8 @@ select throws_ok(
   '42501', 'permission denied for table contactos_compartidos',
   'un editor no puede insertar comparticiones a mano');
 
--- La RPC rechaza compartir con uno mismo (22023) y con un email sin cuenta (P0002).
+-- La RPC rechaza compartir con uno mismo (22023) y con un email sin cuenta (PT404: el código con el
+-- que PostgREST responde 404, en vez de P0002, que daría un 500).
 select pruebas.autenticar('a@test.local');
 select throws_ok(
   $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, 'a@test.local', 'lector')$$,
@@ -98,7 +99,7 @@ select throws_ok(
   'A no puede compartir un contacto consigo mismo');
 select throws_ok(
   $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, 'nadie@test.local', 'lector')$$,
-  'P0002', 'No hay ningún usuario con ese email',
+  'PT404', 'No hay ningún usuario con ese email',
   'compartir con un email sin cuenta falla');
 
 -- La RPC normaliza el email (minúsculas y sin espacios en los extremos) y hace upsert: volver a

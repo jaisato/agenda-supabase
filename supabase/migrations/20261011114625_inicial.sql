@@ -183,6 +183,11 @@ create policy "compartidos: revocar el dueño o dejar de ver" on public.contacto
 -- perfiles de otros usuarios. Decisión consciente: el mensaje revela si existe una cuenta con ese
 -- email (como Google Docs). Cambiar el rol de alguien ya compartido y revocar se hacen con
 -- update/delete directos bajo RLS.
+--
+-- Errores de usuario: 42501 (quien llama no es el propietario), PT404 (no hay usuario con ese
+-- email) y 22023 (compartir con uno mismo). El diseño usaba P0002 para el segundo, pero PostgREST
+-- responde 500 a P0002; un código PTxxx hace que responda con el estado HTTP xxx (aquí 404) y que
+-- el cliente reciba code: 'PT404'.
 
 create function public.compartir_contacto(p_contacto_id uuid, p_email text, p_rol public.rol_comparticion)
 returns public.contactos_compartidos
@@ -196,7 +201,7 @@ begin
   end if;
   select id into v_usuario from public.perfiles where lower(email) = lower(trim(p_email));
   if v_usuario is null then
-    raise exception 'No hay ningún usuario con ese email' using errcode = 'P0002';
+    raise exception 'No hay ningún usuario con ese email' using errcode = 'PT404';
   end if;
   if v_usuario = (select auth.uid()) then
     raise exception 'No puedes compartir un contacto contigo mismo' using errcode = '22023';
