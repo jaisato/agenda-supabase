@@ -1,6 +1,5 @@
 -- Esquema base de la agenda (§5.1 a §5.5 del diseño): tipo, tablas, funciones auxiliares, triggers,
--- RLS, privilegios, políticas de contactos y de contactos_compartidos y la RPC compartir_contacto.
--- Las políticas de perfiles se añaden en este mismo fichero en una tarea posterior.
+-- RLS, privilegios, las políticas de las tres tablas y la RPC compartir_contacto.
 
 -- §5.1 Esquema public
 
@@ -110,8 +109,7 @@ grant execute on function privado.es_propietario(uuid), privado.rol_compartido(u
   privado.es_contraparte(uuid) to authenticated;
 
 -- RLS activada en las tres tablas. Una tabla sin políticas no deja ver ninguna fila a authenticated:
--- las de contactos y contactos_compartidos están más abajo y las de perfiles llegan en una tarea
--- posterior.
+-- las políticas de las tres están más abajo.
 
 alter table public.perfiles enable row level security;
 alter table public.contactos enable row level security;
@@ -143,8 +141,7 @@ grant update (rol) on public.contactos_compartidos to authenticated;
 -- §5.4 Políticas de contactos (todas to authenticated)
 --
 -- (select auth.uid()) en lugar de auth.uid() para que Postgres lo evalúe una vez por consulta. La
--- RLS de contactos ya está activada más arriba. Las políticas de perfiles llegan en una tarea
--- posterior.
+-- RLS de contactos ya está activada más arriba.
 
 create policy "contactos: ver propios y compartidos" on public.contactos for select
   to authenticated
@@ -176,6 +173,21 @@ create policy "compartidos: cambiar rol el dueño" on public.contactos_compartid
 create policy "compartidos: revocar el dueño o dejar de ver" on public.contactos_compartidos for delete
   to authenticated
   using (privado.es_propietario(contacto_id) or usuario_id = (select auth.uid()));
+
+-- §5.4 Políticas de perfiles (todas to authenticated)
+--
+-- Cada usuario ve su perfil y los de sus contrapartes (quien le comparte un contacto y aquel a
+-- quien se lo comparte). Para saberlo llama a privado.es_contraparte, que consulta las otras dos
+-- tablas sin pasar por sus políticas, como el resto de funciones de privado. Solo edita su propio
+-- perfil, y solo el nombre: el email no tiene privilegio de update (§5.3) y lo mantiene el trigger
+-- crear_perfil a partir de auth.users.
+
+create policy "perfiles: ver el propio y las contrapartes" on public.perfiles for select
+  to authenticated
+  using (id = (select auth.uid()) or privado.es_contraparte(id));
+create policy "perfiles: editar el propio" on public.perfiles for update
+  to authenticated
+  using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 -- §5.5 RPC compartir_contacto
 --
