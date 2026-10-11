@@ -1,0 +1,7 @@
+# Claves publicables de Supabase (sb_publishable_...): públicas por diseño, van en el navegador y la protección es RLS.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Publishable key de Supabase: pública por diseño (se envía al navegador; la protección es RLS)"
+regexes = ['''^sb_publishable_[A-Za-z0-9_-]+$''']

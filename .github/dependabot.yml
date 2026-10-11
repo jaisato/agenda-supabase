@@ -13,23 +13,27 @@ updates:
     groups:
       angular:
         patterns:
-          - "@angular/*"
+          - '@angular/*'
+      supabase:
+        patterns:
+          - '@supabase/*'
+          - 'supabase'
     ignore:
-      - dependency-name: "@angular/*"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: '@angular/*'
+        update-types: ['version-update:semver-major']
       - dependency-name: typescript
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
       # Tampoco las mayores que se salen de los peer de Angular 22: npm las instala con el aviso
       # «ERESOLVE overriding peer dependency», pero Angular no las admite. @angular/build pide
       # vitest ^4.0.8 || ^5.0.0 y tslib ^2.3.0, y @angular/core, rxjs ^6.5.3 || ^7.4.0.
       # Llegarán con el `ng update` que las admita. jsdom no se limita: no es peer de
       # @angular/build y vitest acepta cualquier versión.
       - dependency-name: vitest
-        update-types: ["version-update:semver-major"]
+        update-types: ['version-update:semver-major']
       - dependency-name: tslib
-        update-types: ["version-update:semver-major"]
+        update-types: ['version-update:semver-major']
       - dependency-name: rxjs
-        update-types: ["version-update:semver-major"]
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
