@@ -6,9 +6,9 @@
 -- local. Las filas las cuentan A o B (usuarios recién creados) o, cuando las cuenta postgres, se
 -- filtran por B, para que el resultado no dependa de los datos que ya haya en la base local.
 --
--- authenticated no puede insertar en contactos_compartidos (solo lo hará la RPC compartir_contacto,
--- que llega en otra tarea): las comparticiones se insertan a mano como postgres, que no pasa por
--- RLS.
+-- authenticated no puede insertar en contactos_compartidos (solo lo hace la RPC compartir_contacto,
+-- que se prueba en 03_compartir.sql): aquí las comparticiones se insertan a mano como postgres, que
+-- no pasa por RLS, para que este test dependa solo de las políticas de contactos.
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(18);

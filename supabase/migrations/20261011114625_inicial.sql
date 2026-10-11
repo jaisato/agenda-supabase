@@ -1,6 +1,6 @@
--- Esquema base de la agenda (§5.1 a §5.4 del diseño): tipo, tablas, funciones auxiliares, triggers,
--- RLS, privilegios y políticas de contactos. Las políticas de contactos_compartidos y perfiles y la
--- RPC compartir_contacto se añaden en este mismo fichero en tareas posteriores.
+-- Esquema base de la agenda (§5.1 a §5.5 del diseño): tipo, tablas, funciones auxiliares, triggers,
+-- RLS, privilegios, políticas de contactos y de contactos_compartidos y la RPC compartir_contacto.
+-- Las políticas de perfiles se añaden en este mismo fichero en una tarea posterior.
 
 -- §5.1 Esquema public
 
@@ -105,8 +105,8 @@ grant execute on function privado.es_propietario(uuid), privado.rol_compartido(u
   privado.es_contraparte(uuid) to authenticated;
 
 -- RLS activada en las tres tablas. Una tabla sin políticas no deja ver ninguna fila a authenticated:
--- las de contactos están al final de este fichero y las de las otras dos llegan en tareas
--- posteriores.
+-- las de contactos y contactos_compartidos están más abajo y las de perfiles llegan en una tarea
+-- posterior.
 
 alter table public.perfiles enable row level security;
 alter table public.contactos enable row level security;
@@ -138,8 +138,8 @@ grant update (rol) on public.contactos_compartidos to authenticated;
 -- §5.4 Políticas de contactos (todas to authenticated)
 --
 -- (select auth.uid()) en lugar de auth.uid() para que Postgres lo evalúe una vez por consulta. La
--- RLS de contactos ya está activada más arriba. Las políticas de contactos_compartidos y perfiles
--- llegan en tareas posteriores.
+-- RLS de contactos ya está activada más arriba. Las políticas de perfiles llegan en una tarea
+-- posterior.
 
 create policy "contactos: ver propios y compartidos" on public.contactos for select
   to authenticated
@@ -154,3 +154,53 @@ create policy "contactos: editar el dueño o un editor" on public.contactos for 
 create policy "contactos: borrar el dueño" on public.contactos for delete
   to authenticated
   using (propietario_id = (select auth.uid()));
+
+-- §5.4 Políticas de contactos_compartidos (todas to authenticated)
+--
+-- Consultan contactos solo a través de privado.es_propietario: contactos ya consulta
+-- contactos_compartidos desde sus políticas (privado.rol_compartido), y un select directo de una
+-- tabla en la otra daría recursión infinita. No hay política de insert (ni privilegio): solo la RPC
+-- compartir_contacto crea comparticiones.
+
+create policy "compartidos: ver el compartido o el dueño" on public.contactos_compartidos for select
+  to authenticated
+  using (usuario_id = (select auth.uid()) or privado.es_propietario(contacto_id));
+create policy "compartidos: cambiar rol el dueño" on public.contactos_compartidos for update
+  to authenticated
+  using (privado.es_propietario(contacto_id)) with check (privado.es_propietario(contacto_id));
+create policy "compartidos: revocar el dueño o dejar de ver" on public.contactos_compartidos for delete
+  to authenticated
+  using (privado.es_propietario(contacto_id) or usuario_id = (select auth.uid()));
+
+-- §5.5 RPC compartir_contacto
+--
+-- security definer porque authenticated no puede insertar en contactos_compartidos ni leer los
+-- perfiles de otros usuarios. Decisión consciente: el mensaje revela si existe una cuenta con ese
+-- email (como Google Docs). Cambiar el rol de alguien ya compartido y revocar se hacen con
+-- update/delete directos bajo RLS.
+
+create function public.compartir_contacto(p_contacto_id uuid, p_email text, p_rol public.rol_comparticion)
+returns public.contactos_compartidos
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_usuario uuid;
+  v_fila    public.contactos_compartidos;
+begin
+  if not privado.es_propietario(p_contacto_id) then
+    raise exception 'Solo el propietario puede compartir el contacto' using errcode = '42501';
+  end if;
+  select id into v_usuario from public.perfiles where lower(email) = lower(trim(p_email));
+  if v_usuario is null then
+    raise exception 'No hay ningún usuario con ese email' using errcode = 'P0002';
+  end if;
+  if v_usuario = (select auth.uid()) then
+    raise exception 'No puedes compartir un contacto contigo mismo' using errcode = '22023';
+  end if;
+  insert into public.contactos_compartidos (contacto_id, usuario_id, rol)
+  values (p_contacto_id, v_usuario, p_rol)
+  on conflict (contacto_id, usuario_id) do update set rol = excluded.rol
+  returning * into v_fila;
+  return v_fila;
+end $$;
+revoke execute on function public.compartir_contacto(uuid, text, public.rol_comparticion) from public, anon;
+grant  execute on function public.compartir_contacto(uuid, text, public.rol_comparticion) to authenticated;
