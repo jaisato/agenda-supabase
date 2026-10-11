@@ -45,7 +45,7 @@ export class AuthService {
   }
 
   async salir(): Promise<void> {
-    // Por defecto signOut() cierra la sesión en todos los dispositivos: aquí solo en este.
+    // Solo este dispositivo: sin scope 'local', signOut() cierra la sesión en todos.
     const { error } = await this.supabase.auth.signOut({ scope: 'local' });
     if (error) {
       throw error;
