@@ -33,6 +33,7 @@ describe('MisContactosComponent', () => {
   const nombres = () =>
     Array.from(elemento.querySelectorAll('lista-contactos li'), (li) => li.textContent?.trim());
   const detalles = () => elemento.querySelector('detalles-contacto h5')?.textContent?.trim();
+  const aviso = () => elemento.querySelector('[role="alert"]')?.textContent?.trim();
   const clic = async (selector: string, indice = 0) => {
     elemento.querySelectorAll<HTMLElement>(selector)[indice].click();
     await fixture.whenStable();
@@ -62,6 +63,15 @@ describe('MisContactosComponent', () => {
   it('pinta la lista recibida y ningún detalle hasta seleccionar un contacto', () => {
     expect(nombres()).toEqual(['Bill Gates', 'Tim Cook']);
     expect(detalles()).toBeUndefined();
+    expect(aviso()).toBeUndefined();
+  });
+
+  it('si el resolver no trae la lista (la API falló), avisa en lugar de quedarse en blanco', async () => {
+    fixture.componentRef.setInput('contactos', null);
+    await fixture.whenStable();
+
+    expect(nombres()).toEqual([]);
+    expect(aviso()).toBe('No se ha podido cargar la agenda. ¿Está arrancado json-server?');
   });
 
   it('muestra los detalles del contacto seleccionado', async () => {
@@ -88,6 +98,29 @@ describe('MisContactosComponent', () => {
 
     expect(nombres()).toEqual(['Bill Gates']);
     expect(detalles()).toBeUndefined();
+  });
+
+  it('si el borrado falla, avisa y mantiene el contacto; al borrarlo después, quita el aviso', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await clic('lista-contactos li', 1);
+    await clic('detalles-contacto button.boton-eliminar');
+
+    http
+      .expectOne(`${API}/contactos/11`)
+      .flush(null, { status: 500, statusText: 'Internal Server Error' });
+    await fixture.whenStable();
+
+    expect(aviso()).toBe('No se ha podido eliminar a Tim.');
+    expect(nombres()).toEqual(['Bill Gates', 'Tim Cook']);
+    expect(detalles()).toBe('Tim Cook');
+
+    await clic('detalles-contacto button.boton-eliminar');
+    http.expectOne(`${API}/contactos/11`).flush({});
+    await fixture.whenStable();
+
+    expect(aviso()).toBeUndefined();
+    expect(nombres()).toEqual(['Bill Gates']);
   });
 
   it('si no se confirma, no borra nada', async () => {

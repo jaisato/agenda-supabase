@@ -51,6 +51,21 @@ describe('rutas de la aplicación', () => {
     expect(harness.routeNativeElement?.textContent).toContain('Elon Musk');
   });
 
+  it('si la API no responde, /mis-contactos se abre igualmente y avisa del fallo', async () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const navegacion = harness.navigateByUrl('/mis-contactos', MisContactosComponent);
+    // Error de red: json-server no está arrancado.
+    (await vi.waitFor(() => http.expectOne(`${API}/contactos`))).error(new ProgressEvent('error'));
+    const componente = await navegacion;
+
+    expect(TestBed.inject(Router).url).toBe('/mis-contactos');
+    expect(componente.contactos()).toBeNull();
+    expect(harness.routeNativeElement?.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      'No se ha podido cargar la agenda. ¿Está arrancado json-server?',
+    );
+    consola.mockRestore();
+  });
+
   it('/nuevo-contacto muestra el formulario de alta', async () => {
     await harness.navigateByUrl('/nuevo-contacto', NuevoContactoComponent);
 

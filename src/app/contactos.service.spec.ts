@@ -88,4 +88,32 @@ describe('ContactosService', () => {
     expect(consola).toHaveBeenCalledWith('500 - Server Error duplicado');
     consola.mockRestore();
   });
+
+  it('registra el error al obtener los contactos y lo propaga con un mensaje legible', () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let error: Error | undefined;
+    service.obtenerContactos().subscribe({ error: (e: Error) => (error = e) });
+
+    http
+      .expectOne(`${API}/contactos`)
+      .flush({ error: 'mantenimiento' }, { status: 503, statusText: 'Service Unavailable' });
+
+    expect(error?.message).toBe('503 - Service Unavailable mantenimiento');
+    expect(consola).toHaveBeenCalledWith('503 - Service Unavailable mantenimiento');
+    consola.mockRestore();
+  });
+
+  it('registra el error de una baja fallida y lo propaga con un mensaje legible', () => {
+    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let error: Error | undefined;
+    service.eliminarContacto(tim).subscribe({ error: (e: Error) => (error = e) });
+
+    http
+      .expectOne(`${API}/contactos/11`)
+      .flush({ error: 'no existe' }, { status: 404, statusText: 'Not Found' });
+
+    expect(error?.message).toBe('404 - Not Found no existe');
+    expect(consola).toHaveBeenCalledWith('404 - Not Found no existe');
+    consola.mockRestore();
+  });
 });

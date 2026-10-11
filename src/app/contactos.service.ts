@@ -11,7 +11,9 @@ export class ContactosService {
   private readonly _rutaApiContactos = `${inject(API_URL)}/contactos`;
 
   obtenerContactos(): Observable<Contacto[]> {
-    return this._http.get<Contacto[]>(this._rutaApiContactos);
+    return this._http
+      .get<Contacto[]>(this._rutaApiContactos)
+      .pipe(catchError((error: HttpErrorResponse) => this.handleError(error)));
   }
 
   agregarContacto(contacto: Contacto): Observable<Contacto> {
@@ -21,7 +23,9 @@ export class ContactosService {
   }
 
   eliminarContacto(contacto: Contacto): Observable<unknown> {
-    return this._http.delete(`${this._rutaApiContactos}/${contacto.id}`);
+    return this._http
+      .delete(`${this._rutaApiContactos}/${contacto.id}`)
+      .pipe(catchError((error: HttpErrorResponse) => this.handleError(error)));
   }
 
   private handleError(error: HttpErrorResponse): Observable<never> {
