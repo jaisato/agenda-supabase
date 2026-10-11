@@ -31,7 +31,7 @@
     "@angular/build": "^22.2.1",
     "@angular/cli": "^22.2.1",
     "@angular/compiler-cli": "^22.2.1",
-    "concurrently": "^10.0.5",
+    "concurrently": "^10.0.6",
     "jsdom": "^30.0.0",
     "json-server": "0.17.4",
     "prettier": "^3.8.1",
