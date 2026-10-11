@@ -1,6 +1,6 @@
--- Esquema base de la agenda (§5.1 a §5.3 del diseño): tipo, tablas, funciones auxiliares, triggers,
--- RLS y privilegios. Las políticas de RLS y la RPC compartir_contacto se añaden en este mismo
--- fichero en tareas posteriores.
+-- Esquema base de la agenda (§5.1 a §5.4 del diseño): tipo, tablas, funciones auxiliares, triggers,
+-- RLS, privilegios y políticas de contactos. Las políticas de contactos_compartidos y perfiles y la
+-- RPC compartir_contacto se añaden en este mismo fichero en tareas posteriores.
 
 -- §5.1 Esquema public
 
@@ -95,7 +95,18 @@ create trigger crear_perfil after insert or update of email on auth.users
 create trigger marcar_actualizado before update on public.contactos
   for each row execute function privado.marcar_actualizado();
 
--- RLS activada. Todavía sin políticas: authenticated no ve ninguna fila hasta que se añadan.
+-- Privilegios de ejecución del esquema privado: Postgres concede EXECUTE a public por defecto, así
+-- que se revoca en todas las funciones y solo authenticated ejecuta las tres que usan las políticas.
+-- Las dos funciones de trigger no necesitan grant: Postgres comprueba EXECUTE al crear el trigger,
+-- no al dispararlo.
+
+revoke execute on all functions in schema privado from public;
+grant execute on function privado.es_propietario(uuid), privado.rol_compartido(uuid),
+  privado.es_contraparte(uuid) to authenticated;
+
+-- RLS activada en las tres tablas. Una tabla sin políticas no deja ver ninguna fila a authenticated:
+-- las de contactos están al final de este fichero y las de las otras dos llegan en tareas
+-- posteriores.
 
 alter table public.perfiles enable row level security;
 alter table public.contactos enable row level security;
@@ -123,3 +134,23 @@ grant update (nombre, apellidos, email, telefono, facebook, twitter)
 -- Sin insert: solo la RPC compartir_contacto crea filas.
 grant select, delete on public.contactos_compartidos to authenticated;
 grant update (rol) on public.contactos_compartidos to authenticated;
+
+-- §5.4 Políticas de contactos (todas to authenticated)
+--
+-- (select auth.uid()) en lugar de auth.uid() para que Postgres lo evalúe una vez por consulta. La
+-- RLS de contactos ya está activada más arriba. Las políticas de contactos_compartidos y perfiles
+-- llegan en tareas posteriores.
+
+create policy "contactos: ver propios y compartidos" on public.contactos for select
+  to authenticated
+  using (propietario_id = (select auth.uid()) or privado.rol_compartido(id) is not null);
+create policy "contactos: crear propios" on public.contactos for insert
+  to authenticated
+  with check (propietario_id = (select auth.uid()));
+create policy "contactos: editar el dueño o un editor" on public.contactos for update
+  to authenticated
+  using (propietario_id = (select auth.uid()) or privado.rol_compartido(id) = 'editor')
+  with check (propietario_id = (select auth.uid()) or privado.rol_compartido(id) = 'editor');
+create policy "contactos: borrar el dueño" on public.contactos for delete
+  to authenticated
+  using (propietario_id = (select auth.uid()));
