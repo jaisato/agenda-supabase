@@ -72,8 +72,9 @@ select column_privs_are('public', 'perfiles', 'email', 'authenticated',
 -- EXECUTE de las funciones de privado (§5.2). Postgres lo concede a public por defecto y la migración
 -- lo revoca; function_privs_are cuenta también lo heredado de public, así que «anon sin privilegios»
 -- comprueba que public ya no ejecuta las funciones. Las tres de las políticas las ejecuta
--- authenticated; las de trigger no las ejecuta nadie, porque Postgres comprueba EXECUTE al crear el
--- trigger y no al dispararlo.
+-- authenticated; las dos de trigger no las ejecuta ni anon ni authenticated (solo conserva el
+-- EXECUTE su propietario, postgres) y no les hace falta, porque Postgres comprueba EXECUTE al
+-- crear el trigger y no al dispararlo.
 select function_privs_are('privado', 'es_propietario', array['uuid'], 'anon', '{}'::text[],
   'anon no ejecuta privado.es_propietario(uuid)');
 select function_privs_are('privado', 'rol_compartido', array['uuid'], 'anon', '{}'::text[],
