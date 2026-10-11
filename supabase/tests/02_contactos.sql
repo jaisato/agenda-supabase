@@ -10,6 +10,8 @@
 -- que se prueba en 03_compartir.sql): aquí las comparticiones se insertan a mano como postgres, que
 -- no pasa por RLS, para que este test dependa solo de las políticas de contactos.
 begin;
+-- Silencia el NOTICE de que la extensión pgtap ya existe.
+set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
 select plan(18);
 

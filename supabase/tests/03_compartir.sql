@@ -12,6 +12,8 @@
 -- El id del contacto c1 no se conoce hasta insertarlo y los roles cambian a mitad del test, así que
 -- se guarda en la variable de transacción prueba.c1 y cada consulta lo lee con current_setting().
 begin;
+-- Silencia el NOTICE de que la extensión pgtap ya existe.
+set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
 select plan(29);
 

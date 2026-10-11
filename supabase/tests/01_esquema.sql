@@ -6,6 +6,8 @@
 -- Todas las aserciones llevan descripción. Sin ella, pgTAP lee has_table('public', 'perfiles')
 -- como (tabla, descripción) y busca una tabla llamada «public».
 begin;
+-- Silencia el NOTICE de que la extensión pgtap ya existe.
+set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
 select plan(42);
 
