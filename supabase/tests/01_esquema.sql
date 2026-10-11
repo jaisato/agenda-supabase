@@ -1,12 +1,13 @@
 -- Esquema base de la agenda: tablas, funciones, triggers, RLS y privilegios (§5.1 a §5.3 del
--- diseño). Las políticas llegan en tareas posteriores: con RLS activada y sin políticas,
--- authenticated no ve ninguna fila.
+-- diseño). Lo que hacen las políticas de cada tabla se prueba en los ficheros siguientes
+-- (02_contactos.sql, …); aquí solo se comprueba que la RLS está activada y que aísla a un usuario
+-- de los contactos de otro.
 --
 -- Todas las aserciones llevan descripción. Sin ella, pgTAP lee has_table('public', 'perfiles')
 -- como (tabla, descripción) y busca una tabla llamada «public».
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -44,6 +45,8 @@ select table_privs_are('public', 'contactos', 'anon', '{}'::text[],
   'anon no tiene privilegios sobre contactos');
 select table_privs_are('public', 'contactos_compartidos', 'anon', '{}'::text[],
   'anon no tiene privilegios sobre contactos_compartidos');
+select column_privs_are('public', 'perfiles', 'email', 'anon', '{}'::text[],
+  'anon no tiene privilegios sobre perfiles.email');
 
 select table_privs_are('public', 'contactos', 'authenticated', array['SELECT', 'DELETE'],
   'authenticated lee y borra contactos');
@@ -51,6 +54,8 @@ select column_privs_are('public', 'contactos', 'nombre', 'authenticated',
   array['INSERT', 'SELECT', 'UPDATE'], 'authenticated inserta y actualiza contactos.nombre');
 select column_privs_are('public', 'contactos', 'propietario_id', 'authenticated',
   array['SELECT'], 'authenticated no inserta ni actualiza contactos.propietario_id');
+select column_privs_are('public', 'contactos', 'id', 'authenticated',
+  array['SELECT'], 'authenticated no inserta ni actualiza contactos.id');
 
 select table_privs_are('public', 'contactos_compartidos', 'authenticated',
   array['SELECT', 'DELETE'], 'authenticated lee y borra contactos_compartidos, sin insertar');
@@ -66,17 +71,19 @@ select column_privs_are('public', 'perfiles', 'email', 'authenticated',
 
 -- El trigger crear_perfil copia el usuario nuevo de auth.users a perfiles
 select pruebas.crear_usuario('a@test.local');
-select results_eq($$select email from public.perfiles$$, $$values ('a@test.local')$$,
-  'crear_perfil crea el perfil al crear el usuario');
+select results_eq(
+  $$select email from public.perfiles where id = pruebas.id_usuario('a@test.local')$$,
+  $$values ('a@test.local')$$, 'crear_perfil crea el perfil al crear el usuario');
 
--- Sin políticas, authenticated no ve nada, ni siquiera sus propias filas. La fila existe: la
--- inserta postgres, que es el dueño de la tabla y no pasa por RLS.
+-- La RLS de contactos aísla a los usuarios: A no ve el contacto de B. La fila existe: la inserta
+-- postgres, que es el dueño de la tabla y no pasa por RLS.
+select pruebas.crear_usuario('b@test.local');
 insert into public.contactos (propietario_id, nombre)
-values (pruebas.id_usuario('a@test.local'), 'Contacto oculto');
+values (pruebas.id_usuario('b@test.local'), 'Contacto de B');
 select pruebas.autenticar('a@test.local');
 select is(current_user::text, 'authenticated', 'pruebas.autenticar cambia el rol a authenticated');
 select results_eq($$select count(*)::int from public.contactos$$, array[0],
-  'sin políticas, authenticated no ve ningún contacto');
+  'A no ve el contacto de B');
 
 -- Los helpers cambian de usuario sin necesidad de volver antes a postgres
 select pruebas.anonimo();
