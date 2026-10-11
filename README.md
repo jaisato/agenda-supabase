@@ -40,6 +40,7 @@ npm start
 | `npm run build`             | Build de producción en `dist/agenda/browser/`.                  |
 | `npm test`                  | Pruebas unitarias con Vitest (en modo _watch_ en una terminal). |
 | `npm test -- --watch=false` | Una sola pasada de las pruebas (lo que ejecuta el CI).          |
+| `npm run test:api`          | Pruebas de `server.mjs` con el runner de Node.                  |
 
 ## Qué cambió respecto a la versión con Angular 2
 
@@ -53,6 +54,10 @@ La aplicación se comporta igual; cambian el entorno y algunos detalles internos
 - **CORS de la API.** La CLI de json-server respondía a cualquier origen, con credenciales, así que
   cualquier web abierta en el navegador podía leer y modificar `db.json`. `server.mjs` solo
   acepta el origen de `ng serve`. Si cambias su puerto, cambia también `ORIGEN_PERMITIDO`.
+  Como CORS no impide que la petición llegue, también rechaza con 403 las escrituras con otro
+  `Origin` (un `<form>` de cualquier web podía dar de alta contactos con un POST
+  `x-www-form-urlencoded`) y las peticiones cuyo `Host` no es `localhost`, `127.0.0.1` o `[::1]`
+  (DNS rebinding). `npm run test:api` lo comprueba.
 - **Consola.** `FormularioContactoComponent` ya no vuelca el formulario con `console.log` al dar
   de alta un contacto. Los errores del alta se siguen registrando con `console.error`, con el
   mismo mensaje.

@@ -8,7 +8,8 @@
     "start": "concurrently -k \"npm:api\" \"ng serve\"",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "test:api": "node --test server.test.mjs"
   },
   "private": true,
   "packageManager": "npm@11.19.0",
