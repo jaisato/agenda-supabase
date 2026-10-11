@@ -78,5 +78,31 @@ describe('NuevoContactoComponent', () => {
     expect(navegar).not.toHaveBeenCalled();
     expect(consola).toHaveBeenCalledWith('500 - Server Error duplicado');
     expect(elemento.querySelector('formulario-contacto form')).not.toBeNull();
+    await fixture.whenStable();
+    expect(elemento.querySelector('[role="alert"]')?.textContent).toContain(
+      'No se ha podido guardar el contacto',
+    );
+  });
+
+  it('ignora un segundo «Añadir» mientras el alta está en curso', async () => {
+    await enviar(tim);
+    elemento.querySelector<HTMLButtonElement>('formulario-contacto button[type="submit"]')!.click();
+
+    const req = http.expectOne(`${API}/contactos`);
+    req.flush({ ...tim, id: 14 }, { status: 201, statusText: 'Created' });
+    expect(navegar).toHaveBeenCalledOnce();
+  });
+
+  it('tras un alta fallida permite reintentar y oculta el error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await enviar(tim);
+    http.expectOne(`${API}/contactos`).flush(null, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+
+    elemento.querySelector<HTMLButtonElement>('formulario-contacto button[type="submit"]')!.click();
+    await fixture.whenStable();
+    expect(elemento.querySelector('[role="alert"]')).toBeNull();
+    http.expectOne(`${API}/contactos`).flush({ ...tim, id: 14 });
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
   });
 });

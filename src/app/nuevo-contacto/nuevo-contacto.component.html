@@ -1,2 +1,5 @@
 <!-- Formulario de alta -->
 <formulario-contacto (nuevoContacto)="agregarContacto($event)"> </formulario-contacto>
+@if (error()) {
+  <div class="msg-error" role="alert">No se ha podido guardar el contacto. Inténtalo de nuevo.</div>
+}
