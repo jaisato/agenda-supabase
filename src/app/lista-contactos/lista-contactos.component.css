@@ -1,0 +1,15 @@
+ul {
+  list-style: none;
+}
+
+li:hover {
+  background-color: #f4f4f4;
+  cursor: pointer;
+}
+
+.icono {
+  color: #1eaedb;
+  border: 0;
+  padding: 0;
+  font-size: 26px;
+}

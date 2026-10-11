@@ -1,0 +1,23 @@
+import { Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
+
+import { Contacto } from '../contacto';
+import { ContactosService } from '../contactos.service';
+import { FormularioContactoComponent } from '../formulario-contacto/formulario-contacto.component';
+
+@Component({
+  imports: [FormularioContactoComponent],
+  templateUrl: './nuevo-contacto.component.html',
+})
+export class NuevoContactoComponent {
+  private readonly _router = inject(Router);
+  private readonly _contactosService = inject(ContactosService);
+
+  agregarContacto(contacto: Contacto): void {
+    this._contactosService.agregarContacto(contacto).subscribe({
+      next: () => this._router.navigate(['/mis-contactos']),
+      // ContactosService ya registra el error en la consola.
+      error: () => {},
+    });
+  }
+}
