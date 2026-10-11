@@ -1,2 +1,5 @@
+@if (mensajeError(); as mensaje) {
+  <div class="msg-error" role="alert">{{ mensaje }}</div>
+}
 <!-- Formulario de alta -->
 <formulario-contacto (nuevoContacto)="agregarContacto($event)"> </formulario-contacto>

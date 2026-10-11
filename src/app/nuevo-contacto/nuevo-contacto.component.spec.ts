@@ -23,6 +23,9 @@ describe('NuevoContactoComponent', () => {
   let elemento: HTMLElement;
   let http: HttpTestingController;
   let navegar: MockInstance<Router['navigate']>;
+  const anadir = () =>
+    elemento.querySelector<HTMLButtonElement>('formulario-contacto button[type="submit"]')!;
+  const aviso = () => elemento.querySelector('[role="alert"]')?.textContent?.trim();
   // Rellena el formulario real (FormularioContactoComponent) y pulsa «Añadir».
   const enviar = async (contacto: Omit<Contacto, 'id'>) => {
     for (const [id, valor] of Object.entries(contacto)) {
@@ -31,7 +34,7 @@ describe('NuevoContactoComponent', () => {
       campo.dispatchEvent(new Event('input'));
     }
     await fixture.whenStable();
-    elemento.querySelector<HTMLButtonElement>('formulario-contacto button[type="submit"]')!.click();
+    anadir().click();
   };
 
   beforeEach(async () => {
@@ -78,5 +81,36 @@ describe('NuevoContactoComponent', () => {
     expect(navegar).not.toHaveBeenCalled();
     expect(consola).toHaveBeenCalledWith('500 - Server Error duplicado');
     expect(elemento.querySelector('formulario-contacto form')).not.toBeNull();
+  });
+
+  it('si el alta falla, avisa al usuario y permite reintentar', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await enviar(tim);
+    http
+      .expectOne(`${API}/contactos`)
+      .flush({ error: 'duplicado' }, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+
+    expect(aviso()).toBe('No se ha podido guardar el contacto. Inténtalo de nuevo.');
+
+    anadir().click();
+    http
+      .expectOne(`${API}/contactos`)
+      .flush({ ...tim, id: 14 }, { status: 201, statusText: 'Created' });
+    await fixture.whenStable();
+
+    expect(aviso()).toBeUndefined();
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+  });
+
+  it('un doble clic en «Añadir» envía un solo POST', async () => {
+    await enviar(tim);
+    // Segundo clic antes de que llegue la respuesta del primero.
+    anadir().click();
+
+    http
+      .expectOne(`${API}/contactos`)
+      .flush({ ...tim, id: 14 }, { status: 201, statusText: 'Created' });
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
   });
 });
