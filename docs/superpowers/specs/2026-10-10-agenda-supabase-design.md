@@ -152,7 +152,17 @@ $$;
 
 Más dos funciones de trigger en el mismo esquema: `privado.crear_perfil()` (inserta o actualiza
 `perfiles` tras `insert` o `update of email` en `auth.users`) y `privado.marcar_actualizado()`
-(`actualizado_en = now()` antes de cada `update` en `contactos`).
+(`actualizado_en = clock_timestamp()` antes de cada `update` en `contactos`; `clock_timestamp()` y
+no `now()`, que es constante dentro de una transacción y ocultaría el cambio a un test que corre
+en una sola).
+
+Postgres concede `EXECUTE` a `public` en toda función nueva, así que la migración lo revoca en todas
+las de `privado` (`revoke execute on all functions in schema privado from public`) y lo concede a
+`authenticated` solo en las tres de las políticas; las de trigger no lo necesitan, porque Postgres
+comprueba `EXECUTE` al crear el trigger y no al dispararlo. Un `alter default privileges` no sirve
+de sustituto (no resta el privilegio global por defecto de `public`), así que cada función nueva de
+`privado` necesita su propio `revoke`, y `01_esquema.sql` falla si alguna conserva `EXECUTE` para
+`public`.
 
 ### 5.3 Privilegios
 
@@ -175,27 +185,36 @@ contactos nacen siempre del `default auth.uid()`.
 ```sql
 alter table public.contactos enable row level security;
 create policy "contactos: ver propios y compartidos" on public.contactos for select
+  to authenticated
   using (propietario_id = (select auth.uid()) or privado.rol_compartido(id) is not null);
 create policy "contactos: crear propios" on public.contactos for insert
+  to authenticated
   with check (propietario_id = (select auth.uid()));
 create policy "contactos: editar el dueño o un editor" on public.contactos for update
+  to authenticated
   using (propietario_id = (select auth.uid()) or privado.rol_compartido(id) = 'editor')
   with check (propietario_id = (select auth.uid()) or privado.rol_compartido(id) = 'editor');
 create policy "contactos: borrar el dueño" on public.contactos for delete
+  to authenticated
   using (propietario_id = (select auth.uid()));
 
 alter table public.contactos_compartidos enable row level security;
 create policy "compartidos: ver el compartido o el dueño" on public.contactos_compartidos for select
+  to authenticated
   using (usuario_id = (select auth.uid()) or privado.es_propietario(contacto_id));
 create policy "compartidos: cambiar rol el dueño" on public.contactos_compartidos for update
+  to authenticated
   using (privado.es_propietario(contacto_id)) with check (privado.es_propietario(contacto_id));
 create policy "compartidos: revocar el dueño o dejar de ver" on public.contactos_compartidos for delete
+  to authenticated
   using (privado.es_propietario(contacto_id) or usuario_id = (select auth.uid()));
 
 alter table public.perfiles enable row level security;
 create policy "perfiles: ver el propio y las contrapartes" on public.perfiles for select
+  to authenticated
   using (id = (select auth.uid()) or privado.es_contraparte(id));
 create policy "perfiles: editar el propio" on public.perfiles for update
+  to authenticated
   using (id = (select auth.uid())) with check (id = (select auth.uid()));
 ```
 
@@ -217,7 +236,7 @@ begin
   end if;
   select id into v_usuario from public.perfiles where lower(email) = lower(trim(p_email));
   if v_usuario is null then
-    raise exception 'No hay ningún usuario con ese email' using errcode = 'P0002';
+    raise exception 'No hay ningún usuario con ese email' using errcode = 'PT404';
   end if;
   if v_usuario = (select auth.uid()) then
     raise exception 'No puedes compartir un contacto contigo mismo' using errcode = '22023';
@@ -234,6 +253,12 @@ grant  execute on function public.compartir_contacto(uuid, text, public.rol_comp
 
 Decisión consciente: el mensaje revela si existe una cuenta con ese email (como Google Docs).
 Cambiar el rol de alguien ya compartido y revocar se hacen con `update`/`delete` directos bajo RLS.
+
+El error «No hay ningún usuario con ese email» usa `PT404` y no `P0002`: PostgREST responde HTTP 500
+a `P0002`, mientras que un código `PTxxx` llega al cliente con el estado `xxx` (aquí 404) y
+`code: 'PT404'`. Los errores de usuario de la RPC son `42501` (quien llama no es el propietario),
+`PT404` y `22023` (compartir con uno mismo), y la aplicación los distingue por `error.code`, nunca
+por el estado HTTP.
 
 ### 5.6 Qué no hay
 
@@ -295,7 +320,8 @@ contactos; el compartido solo la suya, y de ella sale su rol.
 - `AuthService`: `sesion` y `usuario` como signals (desde `onAuthStateChange`), `registrar`,
   `entrar`, `salir`, `recuperar`, `nuevaContrasena`, `canjearCodigo`.
 - `MensajesService`: un aviso visible en `app.component.html`; traduce errores de PostgREST
-  (`42501` → «No tienes permiso», `P0002` → el mensaje de la RPC) y de Auth.
+  (`42501` → «No tienes permiso»; `PT404` y `22023` → el mensaje de la RPC) y de Auth, siempre por
+  `error.code` y no por el estado HTTP.
 - Guards funcionales: `authGuard` (sin sesión → `/entrar`) y `sinSesionGuard` (con sesión →
   `/mis-contactos`).
 
@@ -349,18 +375,27 @@ rutas profundas (incluida `/auth/confirmar?code=…`) arranquen la SPA.
 2. **Frontend**: `ng build` de producción con `baseHref`, `404.html`,
    `actions/upload-pages-artifact` y `actions/deploy-pages`. Fuente de Pages: GitHub Actions.
 
+«Tras CI verde» no lo comprueba el workflow: lo garantiza la protección de `master` (checks
+requeridos «Build, tests y npm audit» y «Base de datos», rama al día, también para administradores),
+aplicada antes de fusionar. Todo cambio entra por PR.
+
 Las acciones se fijan por SHA, como en el resto de repos del autor.
 
-**`keep-alive.yml`** (lunes, 06:xx UTC): una petición a `/auth/v1/health` con la publishable key
-(responde 200) para que el plan free no pause el proyecto; según la documentación de Supabase
-cuenta cualquier petición a la API del proyecto, y se comprueba al implementar. Un minuto de
-Actions a la semana.
+**`keep-alive.yml`** (dos veces al día, 06:17 y 18:17 UTC): inicia sesión con la cuenta demo pública,
+lee un contacto (`GET /rest/v1/contactos?select=id&limit=1`) y cierra esa sesión (`scope=local`, para
+no echar a quien esté probando la demo). Supabase pausa un proyecto Free que durante una semana no
+recibe actividad real de usuario en la base de datos
+(https://supabase.com/docs/guides/platform/free-project-pausing): un `GET /auth/v1/health` no cuenta,
+porque GoTrue contesta sin consultar Postgres, y una sola ejecución semanal no deja margen si GitHub
+retrasa u omite alguna. Límites: GitHub desactiva los workflows programados de un repositorio
+público tras 60 días sin actividad en él, y si alguien cambia la contraseña de la cuenta demo el
+workflow falla (es la señal visible) y `npm run seed:demo` la restaura.
 
 **Inventario de secretos**:
 
 | Dónde | Qué | Quién lo crea |
 |---|---|---|
-| Repo (público) | URL del proyecto, publishable key | — (son públicos) |
+| Repo (público) | URL del proyecto, publishable key, credenciales de la cuenta demo | — (son públicos) |
 | GitHub Secrets | `SUPABASE_ACCESS_TOKEN` (PAT acotado), `SUPABASE_DB_PASSWORD` | el autor |
 | GitHub Variables | `SUPABASE_PROJECT_REF` | el autor |
 | Dashboard Supabase | API key de Resend (SMTP) | el autor (o la sesión vía MCP de Resend, con permiso) |
@@ -378,7 +413,8 @@ se cambia con `set local role authenticated` y `request.jwt.claims` (`sub`, `rol
 hace PostgREST. Ficheros:
 
 1. `01_esquema.sql`: tablas, RLS activada en las tres, enum, funciones de `privado`, y los GRANT
-   exactos (`anon` sin privilegios; `authenticated` con `insert`/`update` solo en columnas de datos).
+   exactos (`anon` sin privilegios; `authenticated` con `insert`/`update` solo en columnas de datos;
+   ninguna función de `privado` ejecutable por `public`).
 2. `02_contactos.sql`: A ve los suyos y B no; B no edita ni borra los de A (0 filas); insertar con
    `propietario_id` ajeno falla (`42501`).
 3. `03_compartir.sql`: tras la RPC como lector, B ve pero no edita; ascendido a editor, B edita el
@@ -418,7 +454,7 @@ Data API con la publishable key sin sesión devuelve vacío.
 | Recursión infinita entre políticas | funciones `SECURITY DEFINER` en `privado` (5.2) |
 | Un editor se apropia de un contacto | privilegios por columna (5.3), probado en pgTAP |
 | Correos que no llegan | SMTP propio por Resend; Mailpit en local; límite 30/h documentado |
-| Proyecto pausado por inactividad | `keep-alive.yml` semanal |
+| Proyecto pausado por inactividad | `keep-alive.yml` dos veces al día, con actividad real en la base de datos (§8) |
 | El canje PKCE exige el mismo navegador que inició el registro | texto en la pantalla «revisa tu correo» |
 | Supabase cambia API o CLI | versiones fijadas; verificar changelog y `--help` antes de cada cambio |
 | Rutas profundas en Pages | `404.html` = `index.html` |

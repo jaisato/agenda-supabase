@@ -84,18 +84,19 @@ Expected: `gh repo view jaisato/agenda-supabase --json name --jq .name` → `age
 
 - [ ] **Step 4: Hacerlo público y activar Pages con Actions**
 
-Run: `gh repo edit jaisato/agenda-supabase --visibility public --accept-visibility-change-consequences && gh api -X POST repos/jaisato/agenda-supabase/pages -f build_type=workflows`
+Run: `gh repo edit jaisato/agenda-supabase --visibility public --accept-visibility-change-consequences && gh api -X POST repos/jaisato/agenda-supabase/pages -f build_type=workflow`
 Expected: `gh repo view --json visibility --jq .visibility` → `PUBLIC`;
 `gh api repos/jaisato/agenda-supabase/pages --jq '.build_type + " " + .html_url'` →
-`workflows https://jaisato.github.io/agenda-supabase/`;
+`workflow https://jaisato.github.io/agenda-supabase/`;
 `gh api repos/jaisato/agenda-supabase --jq .security_and_analysis.secret_scanning.status` → `enabled`.
 
 - [ ] **Step 5: Ajustar `.gitignore`, Dependabot y el título del README**
 
 `.gitignore`: añadir las líneas `supabase/.temp/` y `supabase/.branches/`.
 `.github/dependabot.yml`: en el ecosistema `npm`, añadir el grupo
-`supabase: { patterns: ["@supabase/*", "supabase"] }`; añadir un segundo `update` con
-`package-ecosystem: github-actions`, `directory: /`, `schedule: { interval: weekly }`.
+`supabase: { patterns: ["@supabase/*", "supabase"] }`. El bloque `github-actions` mensual que el
+fichero ya tenía se conserva: no se añade otro semanal, porque ya mantiene fijados los SHA de las
+acciones.
 `README.md`: primera línea `# agenda-supabase` (el resto se reescribe en la Tarea 13).
 
 - [ ] **Step 6: Commit**
@@ -266,7 +267,7 @@ Fixtures A, B, C. Como A, crear el contacto `c1` (guardar su `id`). Aserciones:
   `delete` → 0 filas; `throws_ok($$select public.compartir_contacto('<c1>', 'c@test.local', 'lector')$$, '42501')`;
   `throws_ok($$insert into public.contactos_compartidos (contacto_id, usuario_id, rol) values ('<c1>', '<id de C>', 'lector')$$, '42501')`.
 - Como A: `throws_ok(… compartir_contacto('<c1>', 'a@test.local', 'lector') …, '22023')`;
-  `throws_ok(… compartir_contacto('<c1>', 'nadie@test.local', 'lector') …, 'P0002')`.
+  `throws_ok(… compartir_contacto('<c1>', 'nadie@test.local', 'lector') …, 'PT404')`.
 - Review Focus 1 y 2: como A, `lives_ok($$select public.compartir_contacto('<c1>', '  B@Test.LOCAL ', 'lector')$$)`
   y `results_eq($$select rol from public.contactos_compartidos where contacto_id = '<c1>'$$, $$values ('lector'::public.rol_comparticion)$$)` (vuelve de editor a lector, sin duplicados).
 - Visibilidad de las comparticiones: como A, `count(*)` de `contactos_compartidos` → 1; como C → 0.
@@ -381,7 +382,7 @@ en verde (`gh api repos/jaisato/agenda-supabase/actions/runs/<id>/jobs --jq '.jo
   `export type Mensaje = { tipo: 'error' | 'exito'; texto: string }`; `error(texto: string): void`;
   `exito(texto: string): void`; `limpiar(): void`;
   `deError(error: { code?: string | null; message: string }): string` con esta tabla exacta:
-  `42501` → «No tienes permiso para hacer eso»; `P0002` y `22023` → `error.message` (los textos ya
+  `42501` → «No tienes permiso para hacer eso»; `PT404` y `22023` → `error.message` (los textos ya
   son de la RPC); `invalid_credentials` → «Email o contraseña incorrectos»; `email_not_confirmed` →
   «Confirma tu correo antes de entrar»; `user_already_exists` → «Ya existe una cuenta con ese
   email»; `weak_password` → «La contraseña debe tener al menos 8 caracteres»; `over_email_send_rate_limit`
@@ -637,8 +638,11 @@ comparticiones; enviar llama a `compartir('c1', 'b@x.es', 'editor')`; «Revocar�
   Job `pages` (`needs: migraciones`, `environment: github-pages`): `npm ci`, `npm run build:pages`,
   `cp dist/agenda/browser/index.html dist/agenda/browser/404.html`, `actions/configure-pages`,
   `actions/upload-pages-artifact` (`path: dist/agenda/browser`), `actions/deploy-pages`.
-- `keep-alive.yml`: `schedule: - cron: "17 6 * * 1"` y `workflow_dispatch`; un paso
-  `curl -fsS -H "apikey: sb_publishable_Dn4i5OCgsn8KRuXrVX_70A_oXKbs-Bc" https://zckmejrnscenxwiqykkh.supabase.co/auth/v1/health`.
+- `keep-alive.yml`: `schedule: - cron: '17 6,18 * * *'` (dos veces al día) y `workflow_dispatch`; un
+  paso que entra como la cuenta demo (`POST /auth/v1/token?grant_type=password`), lee un contacto
+  (`GET /rest/v1/contactos?select=id&limit=1`) y cierra esa sesión
+  (`POST /auth/v1/logout?scope=local`). Un `GET /auth/v1/health` no cuenta como actividad: GoTrue
+  contesta sin consultar Postgres.
 - `scripts/seed-demo.mjs` (ESM, Node 24; usa `@supabase/supabase-js` ya instalado): exige
   `SUPABASE_URL` y `SUPABASE_SECRET_KEY` en el entorno (si faltan, mensaje y `exit 1`);
   `createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })`. Usuarios:

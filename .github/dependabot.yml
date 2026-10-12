@@ -1,4 +1,5 @@
-# Dependabot: npm cada semana (con todo @angular/* en una sola PR) y las acciones de GitHub cada mes.
+# Dependabot: npm cada semana (todo @angular/* en una sola PR, y @supabase/* con la CLI `supabase`
+# en otra) y las acciones de GitHub cada mes.
 #
 # - Las versiones mayores de Angular no llegan por aquí: se hacen con `ng update`, que además
 #   ejecuta las migraciones de código.
