@@ -2,6 +2,7 @@ import { Component, computed, inject, input, linkedSignal, signal } from '@angul
 import { Router } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 
+import { AuthService } from '../auth/auth.service';
 import { ContactoVisible } from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { DetallesContactoComponent } from '../detalles-contacto/detalles-contacto.component';
@@ -13,6 +14,7 @@ import { MensajesService } from '../mensajes.service';
   templateUrl: './mis-contactos.component.html',
 })
 export class MisContactosComponent {
+  private readonly _auth = inject(AuthService);
   private readonly _contactosService = inject(ContactosService);
   private readonly _mensajes = inject(MensajesService);
   private readonly _router = inject(Router);
@@ -44,9 +46,7 @@ export class MisContactosComponent {
       this._mensajes.error(this._mensajes.deError(error as PostgrestError));
       return;
     }
-    // Mientras esperaba, puede haberse seleccionado otro contacto.
-    this.seleccionado.update((actual) => (actual?.id === contacto.id ? null : actual));
-    this.lista.update((contactos) => contactos.filter((c) => c.id !== contacto.id));
+    this.quitarDeLasListas(contacto);
   }
 
   editar(contacto: ContactoVisible): void {
@@ -57,9 +57,22 @@ export class MisContactosComponent {
     this._router.navigate(['/contactos', contacto.id, 'compartir']);
   }
 
-  // Marcador: «Dejar de ver» se completa con la función de compartir contactos (quitar la propia
-  // compartición con dejarDeCompartir). Hasta entonces el botón emite el evento y no hace nada.
-  dejarDeVer(_contacto: ContactoVisible): void {}
+  // Quien tiene un contacto compartido (lector o editor) borra su propia compartición; el contacto
+  // sigue siendo de su propietario.
+  async dejarDeVer(contacto: ContactoVisible): Promise<void> {
+    if (!confirm(`¿Dejar de ver a ${contacto.nombre}?`)) {
+      return;
+    }
+    // Fuera el aviso del intento anterior.
+    this._mensajes.limpiar();
+    try {
+      await this._contactosService.dejarDeCompartir(contacto.id, this._auth.usuario()!.id);
+    } catch (error) {
+      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      return;
+    }
+    this.quitarDeLasListas(contacto);
+  }
 
   verDetallesContacto(contacto: ContactoVisible): void {
     this.seleccionado.set(contacto);
@@ -70,5 +83,12 @@ export class MisContactosComponent {
     // gaining access to `window.opener` and repointing this app's tab
     // (reverse tabnabbing).
     window.open(ruta, '_blank', 'noopener,noreferrer');
+  }
+
+  // El contacto ya no se ve (borrado o dejado de ver): fuera de la lista y de los detalles.
+  // Mientras esperaba la respuesta, puede haberse seleccionado otro contacto.
+  private quitarDeLasListas(contacto: ContactoVisible): void {
+    this.seleccionado.update((actual) => (actual?.id === contacto.id ? null : actual));
+    this.lista.update((contactos) => contactos.filter((c) => c.id !== contacto.id));
   }
 }

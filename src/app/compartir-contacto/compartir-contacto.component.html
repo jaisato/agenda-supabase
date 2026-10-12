@@ -1,0 +1,90 @@
+<!-- Compartir un contacto: formulario para dar acceso y lista de las personas que ya lo tienen -->
+@if (propio(); as suyo) {
+  <div class="row">
+    <div class="offset-by-three six columns">
+      <h4>Compartir contacto</h4>
+      <h5>{{ suyo.nombre }} {{ suyo.apellidos }}</h5>
+
+      <form #form="ngForm" (ngSubmit)="compartir(form)" novalidate>
+        <div>
+          <label for="email">Email</label>
+          <input
+            class="u-full-width"
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="off"
+            placeholder="Ej. bill.gates@msn.com"
+            ngModel
+            #fieldEmail="ngModel"
+            required
+            email
+          />
+          @if (fieldEmail.touched && fieldEmail.invalid) {
+            <div class="msg-error">Escribe un email válido</div>
+          }
+        </div>
+
+        <div>
+          <label for="rol">Rol</label>
+          <select class="u-full-width" id="rol" name="rol" [ngModel]="'lector'">
+            <option value="lector">lector</option>
+            <option value="editor">editor</option>
+          </select>
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            class="button-primary u-full-width"
+            [disabled]="form.invalid || enviando()"
+          >
+            Compartir
+          </button>
+        </div>
+      </form>
+
+      @if (cargada()) {
+        <h5>Personas con acceso</h5>
+        @if (comparticiones().length > 0) {
+          <table class="u-full-width">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (persona of comparticiones(); track persona.usuario_id) {
+                <tr>
+                  <td>{{ persona.email }}</td>
+                  <td>
+                    <!-- Sin ngModel: el rol de la lista solo cambia cuando la base de datos acepta el
+                         cambio y, si lo rechaza, cambiarRol devuelve el selector al rol que tenía -->
+                    <select
+                      #selector
+                      [value]="persona.rol"
+                      [attr.aria-label]="'Rol de ' + persona.email"
+                      (change)="cambiarRol(persona, selector)"
+                    >
+                      <option value="lector">lector</option>
+                      <option value="editor">editor</option>
+                    </select>
+                  </td>
+                  <td>
+                    <button type="button" (click)="revocar(persona)">Revocar</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p>Este contacto no está compartido con nadie.</p>
+        }
+      }
+
+      <a routerLink="/mis-contactos">Volver</a>
+    </div>
+  </div>
+}

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { PostgrestError, Session } from '@supabase/supabase-js';
 
 import { AuthService } from './auth/auth.service';
-import { DatosContacto } from './contacto';
+import { DatosContacto, Rol } from './contacto';
 import { ContactosService } from './contactos.service';
 import { SUPABASE } from './supabase/supabase.client';
 import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-de-prueba';
@@ -24,6 +24,25 @@ const sinPermiso = new PostgrestError({
   details: '',
   hint: '',
   code: '42501',
+});
+const sinUsuario = new PostgrestError({
+  message: 'No hay ningún usuario con ese email',
+  details: '',
+  hint: '',
+  code: 'PT404',
+});
+const conUnoMismo = new PostgrestError({
+  message: 'No puedes compartir un contacto contigo mismo',
+  details: '',
+  hint: '',
+  code: '22023',
+});
+// La fila de contactos_compartidos que devuelve la RPC compartir_contacto.
+const filaCompartida = (rol: Rol) => ({
+  contacto_id: 'c1',
+  usuario_id: 'u2',
+  rol,
+  creado_en: '2026-10-01T10:00:00+00:00',
 });
 // Lo que devuelve PostgREST con la compartición embebida.
 const propio = {
@@ -217,6 +236,96 @@ describe('ContactosService', () => {
     });
   });
 
+  describe('compartir', () => {
+    it('llama a la RPC compartir_contacto con el contacto, el email y el rol, y devuelve la compartición', async () => {
+      falso.respuestaRpc('compartir_contacto', { data: filaCompartida('lector'), error: null });
+
+      const comparticion = await service.compartir('c1', 'b@x.es', 'lector');
+
+      expect(falso.cliente.rpc).toHaveBeenCalledExactlyOnceWith('compartir_contacto', {
+        p_contacto_id: 'c1',
+        p_email: 'b@x.es',
+        p_rol: 'lector',
+      });
+      // La RPC devuelve la fila de contactos_compartidos, sin email: es el que se ha pedido.
+      expect(comparticion).toEqual({ usuario_id: 'u2', rol: 'lector', email: 'b@x.es' });
+      // Es una RPC, no una consulta de tabla.
+      expect(falso.consultas).toEqual([]);
+    });
+  });
+
+  describe('listarComparticiones', () => {
+    it('pide las comparticiones del contacto con el email de su perfil y aplana perfiles.email', async () => {
+      falso.respuestaDe('contactos_compartidos', {
+        data: [
+          { usuario_id: 'u2', rol: 'lector', perfiles: { email: 'b@x.es' } },
+          { usuario_id: 'u3', rol: 'editor', perfiles: { email: 'c@x.es' } },
+        ],
+        error: null,
+      });
+
+      const comparticiones = await service.listarComparticiones('c1');
+
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos_compartidos',
+          cadena: [
+            { metodo: 'select', args: ['usuario_id, rol, perfiles(email)'] },
+            { metodo: 'eq', args: ['contacto_id', 'c1'] },
+          ],
+        },
+      ]);
+      expect(comparticiones).toEqual([
+        { usuario_id: 'u2', rol: 'lector', email: 'b@x.es' },
+        { usuario_id: 'u3', rol: 'editor', email: 'c@x.es' },
+      ]);
+    });
+
+    it('un contacto que no se ha compartido con nadie da una lista vacía', async () => {
+      falso.respuestaDe('contactos_compartidos', { data: [], error: null });
+
+      expect(await service.listarComparticiones('c1')).toEqual([]);
+    });
+  });
+
+  describe('cambiarRol', () => {
+    it('actualiza el rol de esa compartición, filtrando por contacto y por usuario', async () => {
+      falso.respuestaDe('contactos_compartidos', { data: null, error: null });
+
+      await expect(service.cambiarRol('c1', 'u2', 'editor')).resolves.toBeUndefined();
+
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos_compartidos',
+          cadena: [
+            { metodo: 'update', args: [{ rol: 'editor' }] },
+            { metodo: 'eq', args: ['contacto_id', 'c1'] },
+            { metodo: 'eq', args: ['usuario_id', 'u2'] },
+          ],
+        },
+      ]);
+    });
+  });
+
+  describe('dejarDeCompartir', () => {
+    it('borra esa compartición, filtrando por contacto y por usuario', async () => {
+      falso.respuestaDe('contactos_compartidos', { data: null, error: null });
+
+      await expect(service.dejarDeCompartir('c1', 'u2')).resolves.toBeUndefined();
+
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos_compartidos',
+          cadena: [
+            { metodo: 'delete', args: [] },
+            { metodo: 'eq', args: ['contacto_id', 'c1'] },
+            { metodo: 'eq', args: ['usuario_id', 'u2'] },
+          ],
+        },
+      ]);
+    });
+  });
+
   // Como el cliente, que no rechaza: el fallo viene en `error`. El servicio lo lanza tal cual,
   // con su `code`, para que quien lo llame lo traduzca con MensajesService.deError().
   it.each([
@@ -230,4 +339,25 @@ describe('ContactosService', () => {
 
     await expect(llamar()).rejects.toBe(sinPermiso);
   });
+
+  it.each([
+    ['listarComparticiones', () => service.listarComparticiones('c1')],
+    ['cambiarRol', () => service.cambiarRol('c1', 'u2', 'editor')],
+    ['dejarDeCompartir', () => service.dejarDeCompartir('c1', 'u2')],
+  ])('%s lanza el error de Supabase si lo hay', async (_nombre, llamar) => {
+    falso.respuestaDe('contactos_compartidos', { data: null, error: sinPermiso });
+
+    await expect(llamar()).rejects.toBe(sinPermiso);
+  });
+
+  // Los errores de la RPC llegan con el código que decide MensajesService.deError(): 42501 (no es
+  // el propietario), PT404 (no hay nadie con ese email) y 22023 (compartir con uno mismo).
+  it.each([sinPermiso, sinUsuario, conUnoMismo])(
+    'compartir lanza tal cual el error $code de la RPC',
+    async (error) => {
+      falso.respuestaRpc('compartir_contacto', { data: null, error });
+
+      await expect(service.compartir('c1', 'b@x.es', 'lector')).rejects.toBe(error);
+    },
+  );
 });

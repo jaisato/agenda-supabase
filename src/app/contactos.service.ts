@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 
 import { AuthService } from './auth/auth.service';
-import { Contacto, ContactoVisible, DatosContacto, Rol } from './contacto';
+import { Comparticion, Contacto, ContactoVisible, DatosContacto, Rol } from './contacto';
 import { SUPABASE } from './supabase/supabase.client';
 
 // Un contacto con las comparticiones embebidas. La RLS decide qué comparticiones llegan: el
@@ -75,6 +75,64 @@ export class ContactosService {
     if (error) {
       throw error;
     }
+  }
+
+  /**
+   * Comparte el contacto con la persona de ese email. Solo el propietario puede; la RPC normaliza
+   * el email y, si ya estaba compartido con esa persona, le cambia el rol. Lanza el error de la
+   * RPC: `42501` (no es el propietario), `PT404` (no hay nadie con ese email) o `22023` (compartir
+   * con uno mismo).
+   */
+  async compartir(contactoId: string, email: string, rol: Rol): Promise<Comparticion> {
+    const { data, error } = await this.supabase.rpc('compartir_contacto', {
+      p_contacto_id: contactoId,
+      p_email: email,
+      p_rol: rol,
+    });
+    if (error) {
+      throw error;
+    }
+    // La RPC devuelve la fila de contactos_compartidos, que no lleva el email: es el que se pidió.
+    return { usuario_id: data.usuario_id, rol: data.rol, email };
+  }
+
+  async cambiarRol(contactoId: string, usuarioId: string, rol: Rol): Promise<void> {
+    const { error } = await this.supabase
+      .from('contactos_compartidos')
+      .update({ rol })
+      .eq('contacto_id', contactoId)
+      .eq('usuario_id', usuarioId);
+    if (error) {
+      throw error;
+    }
+  }
+
+  /** Quita el acceso de esa persona al contacto: lo hace el propietario o la propia persona. */
+  async dejarDeCompartir(contactoId: string, usuarioId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('contactos_compartidos')
+      .delete()
+      .eq('contacto_id', contactoId)
+      .eq('usuario_id', usuarioId);
+    if (error) {
+      throw error;
+    }
+  }
+
+  /** Las personas con acceso al contacto, con su email. Solo el propietario las ve todas. */
+  async listarComparticiones(contactoId: string): Promise<Comparticion[]> {
+    const { data, error } = await this.supabase
+      .from('contactos_compartidos')
+      .select('usuario_id, rol, perfiles(email)')
+      .eq('contacto_id', contactoId);
+    if (error) {
+      throw error;
+    }
+    return data.map(({ usuario_id, rol, perfiles }) => ({
+      usuario_id,
+      rol,
+      email: perfiles.email,
+    }));
   }
 
   private visible(fila: FilaConComparticiones, usuarioId: string | undefined): ContactoVisible {

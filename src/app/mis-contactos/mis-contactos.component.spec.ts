@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { PostgrestError } from '@supabase/supabase-js';
+import { PostgrestError, Session } from '@supabase/supabase-js';
 import { MockInstance } from 'vitest';
 
 import { ContactosService } from '../contactos.service';
@@ -35,6 +35,9 @@ const elon = contactoVisibleDePrueba('editor', {
   apellidos: 'Musk',
   email: 'elon.musk@tesla.com',
 });
+// La persona con la sesión abierta: dueña de Tim; Bill (lector) y Elon (editor) le han compartido
+// sus contactos.
+const sesion = { access_token: 'token-u1', user: { id: 'u1', email: 'ana@test.es' } } as Session;
 const sinPermiso = new PostgrestError({
   message: 'permission denied for table contactos',
   details: '',
@@ -80,6 +83,7 @@ describe('MisContactosComponent', () => {
 
   beforeEach(async () => {
     falso = crearSupabaseFalso();
+    falso.auth.getSession.mockResolvedValue({ data: { session: sesion }, error: null });
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: SUPABASE, useValue: falso.cliente }],
     });
@@ -248,16 +252,95 @@ describe('MisContactosComponent', () => {
     });
   });
 
-  it('«Dejar de ver» avisa al componente con el contacto seleccionado', async () => {
-    // La acción se completa con la función de compartir; aquí solo se comprueba el cableado.
-    const dejarDeVer = vi
-      .spyOn(fixture.componentInstance, 'dejarDeVer')
-      .mockImplementation(() => {});
-    await seleccionar('compartidos', 0);
+  describe('dejar de ver', () => {
+    it('tras confirmar, quita la compartición propia (la de la persona con sesión) y repinta la lista y los detalles', async () => {
+      const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      await seleccionar('compartidos', 0);
 
-    await clic(accion('Dejar de ver'));
+      await clic(accion('Dejar de ver'));
 
-    expect(dejarDeVer).toHaveBeenCalledExactlyOnceWith(bill);
+      expect(confirmar).toHaveBeenCalledWith('¿Dejar de ver a Bill?');
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos_compartidos',
+          cadena: [
+            { metodo: 'delete', args: [] },
+            { metodo: 'eq', args: ['contacto_id', 'c2'] },
+            { metodo: 'eq', args: ['usuario_id', 'u1'] },
+          ],
+        },
+      ]);
+      expect(nombres('propios')).toEqual(['Tim Cook']);
+      expect(nombres('compartidos')).toEqual(['Elon Musk']);
+      expect(detalles()).toBeUndefined();
+    });
+
+    it('un editor también puede dejar de verlo', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      await seleccionar('compartidos', 1);
+
+      await clic(accion('Dejar de ver'));
+
+      expect(falso.consultas[0].cadena).toEqual([
+        { metodo: 'delete', args: [] },
+        { metodo: 'eq', args: ['contacto_id', 'c3'] },
+        { metodo: 'eq', args: ['usuario_id', 'u1'] },
+      ]);
+      expect(nombres('compartidos')).toEqual(['Bill Gates']);
+    });
+
+    it('si no se confirma, no borra nada', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await seleccionar('compartidos', 0);
+
+      await clic(accion('Dejar de ver'));
+
+      expect(falso.consultas).toEqual([]);
+      expect(nombres('compartidos')).toEqual(['Bill Gates', 'Elon Musk']);
+      expect(detalles()).toBe('Bill Gates');
+    });
+
+    it('si falla, avisa del error y deja el contacto en la lista y seleccionado', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      falso.respuestaDe('contactos_compartidos', { data: null, error: sinPermiso });
+      await seleccionar('compartidos', 0);
+
+      await clic(accion('Dejar de ver'));
+
+      expect(mensajes.mensaje()).toEqual({
+        tipo: 'error',
+        texto: 'No tienes permiso para hacer eso',
+      });
+      expect(nombres('compartidos')).toEqual(['Bill Gates', 'Elon Musk']);
+      expect(detalles()).toBe('Bill Gates');
+    });
+
+    it('quita el aviso anterior', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      mensajes.error('Algo ha fallado');
+      await seleccionar('compartidos', 0);
+
+      await clic(accion('Dejar de ver'));
+
+      expect(mensajes.mensaje()).toBeNull();
+    });
+
+    it('si mientras espera se selecciona otro contacto, la selección no cambia', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      let terminarBorrado!: () => void;
+      vi.spyOn(TestBed.inject(ContactosService), 'dejarDeCompartir').mockReturnValue(
+        new Promise<void>((resolver) => (terminarBorrado = resolver)),
+      );
+      await seleccionar('compartidos', 0);
+      await clic(accion('Dejar de ver'));
+
+      await seleccionar('compartidos', 1);
+      terminarBorrado();
+      await reposar();
+
+      expect(nombres('compartidos')).toEqual(['Elon Musk']);
+      expect(detalles()).toBe('Elon Musk');
+    });
   });
 
   it('abre los perfiles sociales en una pestaña nueva sin acceso a window.opener', async () => {

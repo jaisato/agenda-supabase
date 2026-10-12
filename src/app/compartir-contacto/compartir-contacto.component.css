@@ -1,0 +1,50 @@
+button:disabled {
+  background-color: #f4f4f4;
+  border: 1px solid #999999;
+  color: #999999;
+}
+
+input.ng-touched.ng-invalid {
+  border: 1px solid red;
+}
+
+input.ng-touched.ng-valid {
+  border: 1px solid green;
+}
+
+.msg-error {
+  color: red;
+  margin-bottom: 15px;
+}
+
+/* Tabla de personas con acceso. Las celdas de skeleton (15px a cada lado) y sus controles (margen
+   inferior, 30px de relleno en el botón) no caben en un móvil: se estrechan, y un email largo se
+   parte en vez de ensanchar la tabla. */
+td,
+th {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+td:first-child,
+th:first-child {
+  padding-left: 0;
+}
+
+td:last-child,
+th:last-child {
+  padding-right: 0;
+}
+
+td:first-child {
+  overflow-wrap: anywhere;
+}
+
+td select,
+td button {
+  margin-bottom: 0;
+}
+
+td button {
+  padding: 0 15px;
+}

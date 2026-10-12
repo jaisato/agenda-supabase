@@ -9,6 +9,7 @@ import { EntrarComponent } from './auth/entrar/entrar.component';
 import { NuevaContrasenaComponent } from './auth/nueva-contrasena/nueva-contrasena.component';
 import { RecuperarComponent } from './auth/recuperar/recuperar.component';
 import { RegistroComponent } from './auth/registro/registro.component';
+import { CompartirContactoComponent } from './compartir-contacto/compartir-contacto.component';
 import { ContactosService } from './contactos.service';
 import { EditarContactoComponent } from './editar-contacto/editar-contacto.component';
 import { MensajesService } from './mensajes.service';
@@ -133,6 +134,64 @@ describe('rutas de la aplicación', () => {
       });
     });
 
+    it('/contactos/:id/compartir resuelve el contacto por su id, lo entrega al componente como input y pinta las personas con acceso', async () => {
+      // Elon es de Ana (u1), que lo tiene compartido con u2 como lector.
+      falso.respuestaDe('contactos', { data: filaElon, error: null });
+      falso.respuestaDe('contactos_compartidos', {
+        data: [{ usuario_id: 'u2', rol: 'lector', perfiles: { email: 'b@x.es' } }],
+        error: null,
+      });
+
+      const componente = await harness.navigateByUrl(
+        '/contactos/c3/compartir',
+        CompartirContactoComponent,
+      );
+      await reposar();
+
+      // El resolver pide el contacto del :id y el componente, las personas con las que se comparte.
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'select', args: ['*, contactos_compartidos(usuario_id, rol)'] },
+            { metodo: 'eq', args: ['id', 'c3'] },
+            { metodo: 'maybeSingle', args: [] },
+          ],
+        },
+        {
+          tabla: 'contactos_compartidos',
+          cadena: [
+            { metodo: 'select', args: ['usuario_id, rol, perfiles(email)'] },
+            { metodo: 'eq', args: ['contacto_id', 'c3'] },
+          ],
+        },
+      ]);
+      expect(componente.contacto()).toEqual(contactoVisibleDePrueba('propietario', camposElon));
+      const pantalla = harness.routeNativeElement!;
+      expect(pantalla.querySelector('h5')?.textContent).toContain('Elon Musk');
+      expect(pantalla.querySelector('tbody tr td')?.textContent).toBe('b@x.es');
+      expect(pantalla.querySelector('form button[type="submit"]')?.textContent?.trim()).toBe(
+        'Compartir',
+      );
+    });
+
+    // Bill es de u2 y lo ha compartido con Ana: ella no puede compartirlo.
+    it('/contactos/:id/compartir de un contacto de otra persona lleva a /mis-contactos con el aviso, sin pedir las comparticiones', async () => {
+      // El falso contesta lo mismo a todas las consultas de la tabla y eso no vale para la lista
+      // de /mis-contactos, a la que se vuelve: esa se sustituye.
+      falso.respuestaDe('contactos', { data: filaBill, error: null });
+      vi.spyOn(TestBed.inject(ContactosService), 'obtenerContactos').mockResolvedValue([]);
+
+      await harness.navigateByUrl('/contactos/c2/compartir', CompartirContactoComponent);
+
+      await vi.waitFor(() => expect(url()).toBe('/mis-contactos'));
+      expect(TestBed.inject(MensajesService).mensaje()).toEqual({
+        tipo: 'error',
+        texto: 'Solo el propietario puede compartir',
+      });
+      expect(falso.consultas.map((consulta) => consulta.tabla)).toEqual(['contactos']);
+    });
+
     it('cualquier otra ruta redirige a /mis-contactos', async () => {
       await harness.navigateByUrl('/no-existe');
 
@@ -186,6 +245,13 @@ describe('rutas de la aplicación', () => {
 
     it('/contactos/:id/editar acaba en /entrar, sin pedir el contacto', async () => {
       await harness.navigateByUrl('/contactos/c2/editar', EntrarComponent);
+
+      expect(url()).toBe('/entrar');
+      expect(falso.cliente.from).not.toHaveBeenCalled();
+    });
+
+    it('/contactos/:id/compartir acaba en /entrar, sin pedir el contacto', async () => {
+      await harness.navigateByUrl('/contactos/c3/compartir', EntrarComponent);
 
       expect(url()).toBe('/entrar');
       expect(falso.cliente.from).not.toHaveBeenCalled();

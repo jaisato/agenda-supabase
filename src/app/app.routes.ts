@@ -7,6 +7,7 @@ import { NuevaContrasenaComponent } from './auth/nueva-contrasena/nueva-contrase
 import { RecuperarComponent } from './auth/recuperar/recuperar.component';
 import { RegistroComponent } from './auth/registro/registro.component';
 import { authGuard, sinSesionGuard } from './auth/auth.guard';
+import { CompartirContactoComponent } from './compartir-contacto/compartir-contacto.component';
 import { EditarContactoComponent } from './editar-contacto/editar-contacto.component';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
@@ -40,6 +41,14 @@ export const routes: Routes = [
   {
     path: 'contactos/:id/editar',
     component: EditarContactoComponent,
+    canActivate: [authGuard],
+    resolve: {
+      contacto: contactoResolver,
+    },
+  },
+  {
+    path: 'contactos/:id/compartir',
+    component: CompartirContactoComponent,
     canActivate: [authGuard],
     resolve: {
       contacto: contactoResolver,
