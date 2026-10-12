@@ -8,7 +8,7 @@ import { AuthService } from '../auth.service';
 
 /**
  * Destino del enlace del correo de recuperación (`/auth/nueva-contrasena?code=…`): canjea el
- * `code` por una sesión de recuperación y deja elegir la contraseña nueva.
+ * `code` por una sesión de recuperación, lo quita de la URL y deja elegir la contraseña nueva.
  */
 @Component({
   imports: [FormsModule, RouterLink],
@@ -38,9 +38,15 @@ export class NuevaContrasenaComponent implements OnInit {
       await this.auth.canjearCodigo(code);
     } catch {
       this.enlaceInvalido.set(true);
+      return;
     } finally {
       this.ocupado.set(false);
     }
+    // Canjeado, el code sobra en la URL: recargar la página o volver a ella con «Atrás» lo
+    // canjearía otra vez, fallaría y dejaría sin formulario a quien ya tiene la sesión de
+    // recuperación abierta. Se sustituye en el historial; es la misma ruta, así que el
+    // componente se reutiliza (ngOnInit no se repite) y `code` pasa a undefined.
+    await this.router.navigate(['/auth/nueva-contrasena'], { replaceUrl: true });
   }
 
   async guardar(form: NgForm): Promise<void> {
@@ -54,7 +60,7 @@ export class NuevaContrasenaComponent implements OnInit {
     try {
       await this.auth.nuevaContrasena(password);
       this.mensajes.exito('Contraseña actualizada');
-      // replaceUrl: «Atrás» no debe volver a esta URL, cuyo code ya está gastado.
+      // replaceUrl: «Atrás» no debe volver a este formulario, que ya ha cumplido su papel.
       await this.router.navigate(['/mis-contactos'], { replaceUrl: true });
     } catch (error) {
       this.mensajes.error(this.mensajes.deError(error as AuthError));

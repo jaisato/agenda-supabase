@@ -2,7 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { Session } from '@supabase/supabase-js';
+import { AuthPKCECodeVerifierMissingError, Session } from '@supabase/supabase-js';
 
 import { API_URL } from './api-url.token';
 import { appConfig } from './app.config';
@@ -42,6 +42,12 @@ describe('rutas de la aplicación', () => {
   // El resolver pide los contactos antes de activar /mis-contactos (siguen sobre HTTP).
   const contestarContactos = async (contactos: Contacto[]) =>
     (await vi.waitFor(() => http.expectOne(`${API}/contactos`))).flush(contactos);
+  // Deja que terminen las promesas pendientes (el canje de un code, la navegación que le sigue)
+  // y el repintado que provocan.
+  const reposar = async () => {
+    await new Promise((resolver) => setTimeout(resolver));
+    await harness.fixture.whenStable();
+  };
 
   beforeEach(async () => {
     falso = crearSupabaseFalso();
@@ -229,6 +235,46 @@ describe('rutas de la aplicación', () => {
         tipo: 'exito',
         texto: 'Contraseña actualizada',
       });
+    });
+
+    it('recargar la página de nueva contraseña, o volver a ella con «Atrás», no canjea otra vez el code gastado: el formulario sigue ahí', async () => {
+      // Como el cliente real: el code es de un solo uso. El primer canje abre la sesión de
+      // recuperación; el segundo falla, porque auth-js ya borró el code_verifier.
+      let gastado = false;
+      falso.auth.exchangeCodeForSession.mockImplementation(async () => {
+        if (gastado) {
+          return {
+            data: { user: null, session: null },
+            error: new AuthPKCECodeVerifierMissingError(),
+          };
+        }
+        gastado = true;
+        falso.emitirAuth('PASSWORD_RECOVERY', ana);
+        return { data: { session: ana, user: ana.user }, error: null };
+      });
+      await harness.navigateByUrl(
+        '/auth/nueva-contrasena?code=codigo-pkce',
+        NuevaContrasenaComponent,
+      );
+      await reposar();
+      // Lo que muestra entonces la barra de direcciones es lo que el navegador abrirá al
+      // recargar o al volver con «Atrás».
+      const direccion = url();
+
+      // Con la sesión de recuperación abierta se puede salir por la barra de navegación…
+      const salida = harness.navigateByUrl('/mis-contactos', MisContactosComponent);
+      await contestarContactos([elon]);
+      await salida;
+      // …y volver: el router abre otra vez esa dirección.
+      await harness.navigateByUrl(direccion, NuevaContrasenaComponent);
+      await reposar();
+
+      expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledExactlyOnceWith('codigo-pkce');
+      expect(harness.routeNativeElement?.querySelector('form')).not.toBeNull();
+      expect(harness.routeNativeElement?.textContent).not.toContain(
+        'No hemos podido validar el enlace',
+      );
+      expect(direccion).toBe('/auth/nueva-contrasena');
     });
   });
 });

@@ -72,8 +72,8 @@ describe('NuevaContrasenaComponent', () => {
 
     expect(falso.auth.updateUser).toHaveBeenCalledExactlyOnceWith({ password: 'otra-clave-123' });
     expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Contraseña actualizada' });
-    // replaceUrl: «Atrás» no debe volver a la URL cuyo code ya está gastado.
-    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], { replaceUrl: true });
+    // replaceUrl: «Atrás» no debe volver a esta página con el formulario ya enviado.
+    expect(navegar).toHaveBeenLastCalledWith(['/mis-contactos'], { replaceUrl: true });
   });
 
   describe('con code (enlace del correo de recuperación)', () => {
@@ -98,6 +98,18 @@ describe('NuevaContrasenaComponent', () => {
       expect(falso.auth.exchangeCodeForSession.mock.invocationCallOrder[0]).toBeLessThan(
         falso.auth.updateUser.mock.invocationCallOrder[0],
       );
+    });
+
+    it('una vez canjeado, quita el code de la URL sustituyéndola en el historial, para que recargar o volver con «Atrás» no lo canjee otra vez', async () => {
+      falso.auth.exchangeCodeForSession.mockResolvedValue(canjeValido);
+
+      await abrir('codigo-pkce');
+
+      expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledExactlyOnceWith('codigo-pkce');
+      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/auth/nueva-contrasena'], {
+        replaceUrl: true,
+      });
+      expect(guardar()).not.toBeNull();
     });
 
     it('si el code ha caducado o ya se usó, no hay formulario: avisa y ofrece pedir otro enlace en /auth/recuperar', async () => {
