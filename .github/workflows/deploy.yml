@@ -1,0 +1,81 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un solo despliegue a la vez y sin cancelar el que está en marcha: cancelar a mitad de un
+# `db push` dejaría las migraciones a medias.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  # Aplica a la base de datos real las migraciones nuevas de supabase/migrations. El frontend solo
+  # se publica si esto sale bien (needs). supabase/seed.sql no se despliega: `db push` no lo ejecuta.
+  migraciones:
+    name: Migraciones
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Los secretos solo llegan a este paso, no al resto del job.
+      - name: Enlazar con el proyecto y aplicar las migraciones
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          npx supabase db push --linked
+
+  pages:
+    name: GitHub Pages
+    needs: migraciones
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      NG_CLI_ANALYTICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Build de producción con base href /agenda-supabase/ (la app vive en una subruta de Pages).
+      - run: npm run build:pages
+
+      # GitHub Pages sirve 404.html en las rutas que no existen como fichero. Con una copia de
+      # index.html, los enlaces profundos (como /auth/confirmar?code=… del correo) arrancan la SPA.
+      - run: cp dist/agenda/browser/index.html dist/agenda/browser/404.html
+
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist/agenda/browser
+
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
