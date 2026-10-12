@@ -15,7 +15,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(17);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -52,11 +52,16 @@ select pruebas.autenticar('c@test.local');
 select results_eq($$select count(*)::int from public.perfiles$$, array[1],
   'C, que no es contraparte de nadie, solo ve su propio perfil');
 
--- A solo edita su perfil, y solo el nombre. Un update que RLS filtra no falla, afecta a cero filas;
--- que A vea el perfil de B (los 2 perfiles de arriba) demuestra que el cero lo causa la política de
--- update y no que la fila fuera invisible. El email no tiene privilegio de update: falla con 42501
--- antes de llegar a las políticas.
+-- A solo edita su perfil, y solo el nombre, que como el de un contacto no pasa de 100 caracteres.
+-- Un update que RLS filtra no falla, afecta a cero filas; que A vea el perfil de B (los 2 perfiles
+-- de arriba) demuestra que el cero lo causa la política de update y no que la fila fuera invisible.
+-- El email no tiene privilegio de update: falla con 42501 antes de llegar a las políticas.
 select pruebas.autenticar('a@test.local');
+select throws_ok(
+  $$update public.perfiles set nombre = repeat('x', 101)
+    where id = pruebas.id_usuario('a@test.local')$$,
+  '23514', 'new row for relation "perfiles" violates check constraint "perfiles_nombre_longitud"',
+  'A no puede ponerse un nombre de más de 100 caracteres');
 select results_eq(
   $$with u as (update public.perfiles set nombre = 'Ana'
                where id = pruebas.id_usuario('a@test.local') returning 1)

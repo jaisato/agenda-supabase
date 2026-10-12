@@ -82,7 +82,8 @@ La aplicación nunca usa la clave secreta. Toda autorización se decide en Postg
 del JWT (`auth.uid()`); la app solo decide qué botones mostrar a partir del rol que ya le llega
 filtrado. El esquema está en
 [`supabase/migrations/20261011114625_inicial.sql`](supabase/migrations/20261011114625_inicial.sql)
-y el diseño, con las alternativas descartadas, en
+(más el límite de 100 caracteres de `perfiles.nombre`, que añade la migración siguiente) y el
+diseño, con las alternativas descartadas, en
 [`docs/superpowers/specs/2026-10-10-agenda-supabase-design.md`](docs/superpowers/specs/2026-10-10-agenda-supabase-design.md).
 
 ### Modelo de datos
@@ -284,8 +285,8 @@ locales y nunca se despliegan.
   mismo o con un email sin cuenta da el error previsto; el email con mayúsculas y espacios se
   encuentra; volver a compartir cambia el rol sin duplicar; `anon` no ejecuta la RPC.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
-  tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`; el
-  email del perfil sigue al de `auth.users`.
+  tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`, de 100
+  caracteres como mucho; el email del perfil sigue al de `auth.users`.
 
 **Sin sesión no se ve nada.** Con el stack local en marcha:
 
