@@ -1,13 +1,13 @@
 <div class="row">
   <div class="offset-by-three six columns">
-    <form #formContacto="ngForm" (ngSubmit)="notificarCreacionContacto(formContacto)" novalidate>
+    <form #formContacto="ngForm" (ngSubmit)="notificarGuardado(formContacto)" novalidate>
       <div>
         <label for="nombre">Nombre</label>
         <input
           class="u-full-width"
           type="text"
           id="nombre"
-          ngModel
+          [ngModel]="inicial()?.nombre ?? ''"
           name="nombre"
           #fieldNombre="ngModel"
           placeholder="Ej. Tim"
@@ -27,7 +27,7 @@
           #fieldApellidos="ngModel"
           type="text"
           placeholder="Ej. Cook"
-          ngModel
+          [ngModel]="inicial()?.apellidos ?? ''"
           required
         />
         @if (fieldApellidos.touched && fieldApellidos.invalid) {
@@ -43,7 +43,7 @@
           name="email"
           type="text"
           placeholder="Ej. tim.cook@apple.com"
-          ngModel
+          [ngModel]="inicial()?.email ?? ''"
           required
         />
       </div>
@@ -56,7 +56,7 @@
           name="telefono"
           type="text"
           placeholder="Ej. 555-123456"
-          ngModel
+          [ngModel]="inicial()?.telefono ?? ''"
           required
         />
       </div>
@@ -69,7 +69,7 @@
           name="facebook"
           type="text"
           placeholder="Ej. tim.cook"
-          ngModel
+          [ngModel]="inicial()?.facebook ?? ''"
           required
         />
       </div>
@@ -82,14 +82,14 @@
           name="twitter"
           type="text"
           placeholder="Ej. @timcook"
-          ngModel
+          [ngModel]="inicial()?.twitter ?? ''"
           required
         />
       </div>
 
       <div>
         <button type="submit" class="button-primary u-full-width" [disabled]="formContacto.invalid">
-          Añadir
+          {{ textoBoton() }}
         </button>
       </div>
     </form>

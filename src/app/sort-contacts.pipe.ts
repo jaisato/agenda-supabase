@@ -6,7 +6,7 @@ import { Contacto } from './contacto';
   name: 'SortContacts',
 })
 export class SortContactsPipe implements PipeTransform {
-  transform(contactos: Contacto[] | null | undefined, orden: string): Contacto[] {
+  transform<T extends Contacto>(contactos: T[] | null | undefined, orden: string): T[] {
     // The list is loaded asynchronously, so the template renders once with
     // `contactos` still undefined - and `undefined.sort()` is a TypeError
     // that takes the whole view down before the data ever arrives.
@@ -19,7 +19,7 @@ export class SortContactsPipe implements PipeTransform {
     // it. A pipe is meant to present the value it is given, not rewrite it -
     // and the component still holds that array as the order the API
     // returned.
-    return contactos.slice().sort((contactoA: Contacto, contactoB: Contacto): number => {
+    return contactos.slice().sort((contactoA: T, contactoB: T): number => {
       let nombreContactoA = `${contactoA.nombre} ${contactoA.apellidos}`.toLowerCase();
       let nombreContactoB = `${contactoB.nombre} ${contactoB.apellidos}`.toLowerCase();
 

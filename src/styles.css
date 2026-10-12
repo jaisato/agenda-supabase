@@ -1,1 +1,15 @@
 /* You can add global styles to this file, and also import other style files */
+
+/* Etiqueta del rol con el que otra persona ha compartido un contacto («Compartidos conmigo»). */
+.rol {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.6rem;
+  border-radius: 4px;
+  background-color: #e1e1e1;
+  color: #555;
+  font-size: 1rem;
+  line-height: 2;
+  text-transform: uppercase;
+  letter-spacing: 0.1rem;
+}

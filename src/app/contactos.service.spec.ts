@@ -1,91 +1,233 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { PostgrestError, Session } from '@supabase/supabase-js';
 
-import { API_URL } from './api-url.token';
-import { Contacto } from './contacto';
+import { AuthService } from './auth/auth.service';
+import { DatosContacto } from './contacto';
 import { ContactosService } from './contactos.service';
+import { SUPABASE } from './supabase/supabase.client';
+import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-de-prueba';
+import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
 
-const API = 'http://api.test';
-const tim: Contacto = {
-  id: 11,
+const SELECCION = '*, contactos_compartidos(usuario_id, rol)';
+const sesionDe = (id: string) =>
+  ({ access_token: `token-${id}`, user: { id, email: `${id}@test.es` } }) as Session;
+const tim: DatosContacto = {
   nombre: 'Tim',
   apellidos: 'Cook',
-  email: 'tim.cook@gmail.com',
+  email: 'tim.cook@apple.com',
   telefono: '555-123456',
   facebook: 'tim.cook',
   twitter: '@timcook',
 };
+const sinPermiso = new PostgrestError({
+  message: 'permission denied for table contactos',
+  details: '',
+  hint: '',
+  code: '42501',
+});
+// Lo que devuelve PostgREST con la compartición embebida.
+const propio = {
+  ...contactoDePrueba({ id: 'c1', propietario_id: 'u1' }),
+  contactos_compartidos: [],
+};
+const deOtro = {
+  ...contactoDePrueba({ id: 'c2', propietario_id: 'u2', nombre: 'Bill', apellidos: 'Gates' }),
+  contactos_compartidos: [{ usuario_id: 'u1', rol: 'editor' }],
+};
 
 describe('ContactosService', () => {
+  let falso: SupabaseFalso;
   let service: ContactosService;
-  let http: HttpTestingController;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    falso = crearSupabaseFalso();
+    // La sesión guardada en el navegador: la persona usuaria es u1.
+    falso.auth.getSession.mockResolvedValue({ data: { session: sesionDe('u1') }, error: null });
     TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: API_URL, useValue: API },
-      ],
+      providers: [{ provide: SUPABASE, useValue: falso.cliente }],
     });
     service = TestBed.inject(ContactosService);
-    http = TestBed.inject(HttpTestingController);
+    await TestBed.inject(AuthService).listo;
   });
 
-  afterEach(() => http.verify());
+  describe('obtenerContactos', () => {
+    it('pide los contactos con la compartición embebida, ordenados por nombre', async () => {
+      falso.respuestaDe('contactos', { data: [], error: null });
 
-  it('usa por defecto el json-server local del puerto 3005', () => {
-    TestBed.resetTestingModule();
-    expect(TestBed.inject(API_URL)).toBe('http://localhost:3005');
+      await service.obtenerContactos();
+
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'select', args: [SELECCION] },
+            { metodo: 'order', args: ['nombre'] },
+          ],
+        },
+      ]);
+    });
+
+    it('el rol es «propietario» en los contactos propios y el de su compartición en los demás', async () => {
+      falso.respuestaDe('contactos', { data: [propio, deOtro], error: null });
+
+      const contactos = await service.obtenerContactos();
+
+      expect(contactos.map((contacto) => contacto.rol)).toEqual(['propietario', 'editor']);
+    });
+
+    it('devuelve el contacto sin la compartición embebida, con el rol añadido', async () => {
+      falso.respuestaDe('contactos', { data: [propio, deOtro], error: null });
+
+      expect(await service.obtenerContactos()).toEqual([
+        contactoVisibleDePrueba('propietario', { id: 'c1', propietario_id: 'u1' }),
+        contactoVisibleDePrueba('editor', {
+          id: 'c2',
+          propietario_id: 'u2',
+          nombre: 'Bill',
+          apellidos: 'Gates',
+        }),
+      ]);
+    });
+
+    it('un contacto propio sigue siendo «propietario» aunque esté compartido con otras personas', async () => {
+      const compartidoPorMi = {
+        ...propio,
+        contactos_compartidos: [
+          { usuario_id: 'u2', rol: 'lector' },
+          { usuario_id: 'u3', rol: 'editor' },
+        ],
+      };
+      falso.respuestaDe('contactos', { data: [compartidoPorMi], error: null });
+
+      expect((await service.obtenerContactos())[0].rol).toBe('propietario');
+    });
+
+    it('toma el usuario de la sesión en cada llamada, no el del momento de crearse el servicio', async () => {
+      const compartidoConU2 = {
+        ...propio,
+        contactos_compartidos: [{ usuario_id: 'u2', rol: 'lector' }],
+      };
+      falso.respuestaDe('contactos', { data: [compartidoConU2], error: null });
+      expect((await service.obtenerContactos())[0].rol).toBe('propietario');
+
+      falso.emitirAuth('SIGNED_IN', sesionDe('u2'));
+
+      expect((await service.obtenerContactos())[0].rol).toBe('lector');
+    });
+
+    it('si el contacto no es propio ni está compartido con la persona (la RLS no lo permite), el rol mínimo', async () => {
+      const ajeno = { ...deOtro, contactos_compartidos: [{ usuario_id: 'u3', rol: 'editor' }] };
+      falso.respuestaDe('contactos', { data: [ajeno], error: null });
+
+      expect((await service.obtenerContactos())[0].rol).toBe('lector');
+    });
   });
 
-  it('obtiene los contactos con GET /contactos', () => {
-    let contactos: Contacto[] | undefined;
-    service.obtenerContactos().subscribe((respuesta) => (contactos = respuesta));
+  describe('obtenerContacto', () => {
+    it('pide un contacto por su id con la misma selección y devuelve su rol', async () => {
+      falso.respuestaDe('contactos', { data: deOtro, error: null });
 
-    const req = http.expectOne(`${API}/contactos`);
-    expect(req.request.method).toBe('GET');
-    req.flush([tim]);
+      const contacto = await service.obtenerContacto('c2');
 
-    expect(contactos).toEqual([tim]);
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'select', args: [SELECCION] },
+            { metodo: 'eq', args: ['id', 'c2'] },
+            { metodo: 'maybeSingle', args: [] },
+          ],
+        },
+      ]);
+      expect(contacto).toEqual(
+        contactoVisibleDePrueba('editor', {
+          id: 'c2',
+          propietario_id: 'u2',
+          nombre: 'Bill',
+          apellidos: 'Gates',
+        }),
+      );
+    });
+
+    it('devuelve null si no existe o no se puede ver', async () => {
+      falso.respuestaDe('contactos', { data: null, error: null });
+
+      expect(await service.obtenerContacto('c9')).toBeNull();
+    });
   });
 
-  it('crea un contacto con POST /contactos y devuelve el que guarda el servidor', () => {
-    const { id: _, ...nuevo } = tim;
-    let creado: Contacto | undefined;
-    service.agregarContacto(nuevo).subscribe((respuesta) => (creado = respuesta));
+  describe('agregarContacto', () => {
+    it('inserta exactamente los datos recibidos y devuelve la fila creada', async () => {
+      const fila = contactoDePrueba({ ...tim, id: 'c9' });
+      falso.respuestaDe('contactos', { data: fila, error: null });
 
-    const req = http.expectOne(`${API}/contactos`);
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual(nuevo);
-    req.flush(tim, { status: 201, statusText: 'Created' });
+      const creado = await service.agregarContacto(tim);
 
-    expect(creado).toEqual(tim);
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'insert', args: [tim] },
+            { metodo: 'select', args: [] },
+            { metodo: 'single', args: [] },
+          ],
+        },
+      ]);
+      expect(creado).toEqual(fila);
+    });
   });
 
-  it('elimina un contacto con DELETE /contactos/:id', () => {
-    let completado = false;
-    service.eliminarContacto(tim).subscribe({ complete: () => (completado = true) });
+  describe('editarContacto', () => {
+    it('actualiza el contacto por su id con los datos recibidos y devuelve la fila', async () => {
+      const fila = contactoDePrueba({ ...tim, id: 'c1' });
+      falso.respuestaDe('contactos', { data: fila, error: null });
 
-    const req = http.expectOne(`${API}/contactos/11`);
-    expect(req.request.method).toBe('DELETE');
-    req.flush({});
+      const editado = await service.editarContacto('c1', tim);
 
-    expect(completado).toBe(true);
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'update', args: [tim] },
+            { metodo: 'eq', args: ['id', 'c1'] },
+            { metodo: 'select', args: [] },
+            { metodo: 'single', args: [] },
+          ],
+        },
+      ]);
+      expect(editado).toEqual(fila);
+    });
   });
 
-  it('registra el error de un alta fallida y lo propaga con un mensaje legible', () => {
-    const consola = vi.spyOn(console, 'error').mockImplementation(() => {});
-    let error: Error | undefined;
-    service.agregarContacto(tim).subscribe({ error: (e: Error) => (error = e) });
+  describe('eliminarContacto', () => {
+    it('borra el contacto por su id', async () => {
+      falso.respuestaDe('contactos', { data: null, error: null });
 
-    http
-      .expectOne(`${API}/contactos`)
-      .flush({ error: 'duplicado' }, { status: 500, statusText: 'Server Error' });
+      await expect(service.eliminarContacto('id-1')).resolves.toBeUndefined();
 
-    expect(error?.message).toBe('500 - Server Error duplicado');
-    expect(consola).toHaveBeenCalledWith('500 - Server Error duplicado');
-    consola.mockRestore();
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'delete', args: [] },
+            { metodo: 'eq', args: ['id', 'id-1'] },
+          ],
+        },
+      ]);
+    });
+  });
+
+  // Como el cliente, que no rechaza: el fallo viene en `error`. El servicio lo lanza tal cual,
+  // con su `code`, para que quien lo llame lo traduzca con MensajesService.deError().
+  it.each([
+    ['obtenerContactos', () => service.obtenerContactos()],
+    ['obtenerContacto', () => service.obtenerContacto('c1')],
+    ['agregarContacto', () => service.agregarContacto(tim)],
+    ['editarContacto', () => service.editarContacto('c1', tim)],
+    ['eliminarContacto', () => service.eliminarContacto('c1')],
+  ])('%s lanza el error de Supabase si lo hay', async (_nombre, llamar) => {
+    falso.respuestaDe('contactos', { data: null, error: sinPermiso });
+
+    await expect(llamar()).rejects.toBe(sinPermiso);
   });
 });

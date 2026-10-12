@@ -12,9 +12,30 @@
     </button>
     <hr />
     <div>{{ contacto.telefono }} | {{ contacto.email }}</div>
-    <!-- Boton eliminar contacto -->
-    <button (click)="notificarEliminacion(contacto)" class="u-full-width boton-eliminar">
-      Eliminar contacto
-    </button>
+    <!-- Acciones según el rol: editar (propietario y editor), compartir y eliminar (propietario) y
+         dejar de ver (quien lo tiene compartido) -->
+    <div class="acciones">
+      @if (contacto.rol !== 'lector') {
+        <button type="button" class="u-full-width" (click)="notificarEdicion(contacto)">
+          Editar
+        </button>
+      }
+      @if (contacto.rol === 'propietario') {
+        <button type="button" class="u-full-width" (click)="notificarComparticion(contacto)">
+          Compartir
+        </button>
+        <button
+          type="button"
+          class="u-full-width boton-eliminar"
+          (click)="notificarEliminacion(contacto)"
+        >
+          Eliminar contacto
+        </button>
+      } @else {
+        <button type="button" class="u-full-width" (click)="notificarDejarDeVer(contacto)">
+          Dejar de ver
+        </button>
+      }
+    </div>
   </div>
 }

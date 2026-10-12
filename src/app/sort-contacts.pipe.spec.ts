@@ -1,14 +1,9 @@
-import { Contacto } from './contacto';
+import { Contacto, ContactoVisible } from './contacto';
 import { SortContactsPipe } from './sort-contacts.pipe';
+import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-de-prueba';
 
-const contacto = (nombre: string, apellidos: string): Contacto => ({
-  nombre,
-  apellidos,
-  email: '',
-  telefono: '',
-  facebook: '',
-  twitter: '',
-});
+const contacto = (nombre: string, apellidos: string): Contacto =>
+  contactoDePrueba({ nombre, apellidos });
 const nombreCompleto = (c: Contacto) => `${c.nombre} ${c.apellidos}`;
 
 describe('SortContactsPipe', () => {
@@ -47,5 +42,14 @@ describe('SortContactsPipe', () => {
   it('devuelve una lista vacía mientras los contactos no han llegado', () => {
     expect(pipe.transform(undefined, 'asc')).toEqual([]);
     expect(pipe.transform(null, 'asc')).toEqual([]);
+  });
+
+  it('devuelve el mismo tipo de contacto que recibe, con todos sus campos (también el rol)', () => {
+    const visibles: ContactoVisible[] = pipe.transform(
+      [contactoVisibleDePrueba('lector', { nombre: 'Tim' })],
+      'asc',
+    );
+
+    expect(visibles[0].rol).toBe('lector');
   });
 });

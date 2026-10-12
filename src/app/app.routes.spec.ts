@@ -1,47 +1,44 @@
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { AuthPKCECodeVerifierMissingError, Session } from '@supabase/supabase-js';
 
-import { API_URL } from './api-url.token';
 import { appConfig } from './app.config';
 import { ConfirmarComponent } from './auth/confirmar/confirmar.component';
 import { EntrarComponent } from './auth/entrar/entrar.component';
 import { NuevaContrasenaComponent } from './auth/nueva-contrasena/nueva-contrasena.component';
 import { RecuperarComponent } from './auth/recuperar/recuperar.component';
 import { RegistroComponent } from './auth/registro/registro.component';
-import { Contacto } from './contacto';
 import { MensajesService } from './mensajes.service';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
 import { SUPABASE } from './supabase/supabase.client';
+import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-de-prueba';
 import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
 
-const API = 'http://api.test';
 const ana = { access_token: 'token-u1', user: { id: 'u1', email: 'ana@test.es' } } as Session;
-const elon: Contacto = {
-  id: 13,
-  nombre: 'Elon',
-  apellidos: 'Musk',
-  email: 'elon.musk@tesla.com',
-  telefono: '393-209423',
-  facebook: 'elon.musk',
-  twitter: '@elonmusk',
+// Lo que devuelve PostgREST con la compartición embebida: Elon es de Ana (u1); Bill es de u2 y lo
+// ha compartido con ella como editor.
+const camposElon = { id: 'c3', nombre: 'Elon', apellidos: 'Musk', email: 'elon.musk@tesla.com' };
+const camposBill = { id: 'c2', propietario_id: 'u2', nombre: 'Bill', apellidos: 'Gates' };
+const filaElon = { ...contactoDePrueba(camposElon), contactos_compartidos: [] };
+const filaBill = {
+  ...contactoDePrueba(camposBill),
+  contactos_compartidos: [{ usuario_id: 'u1', rol: 'editor' }],
 };
 
 describe('rutas de la aplicación', () => {
   let falso: SupabaseFalso;
   let harness: RouterTestingHarness;
-  let http: HttpTestingController;
   const url = () => TestBed.inject(Router).url;
   // Lo que getSession devuelve al arrancar: la sesión guardada en el navegador. Hay que
   // indicarla antes de navegar, que es cuando el guard crea AuthService y la lee.
   const hayUnaSesionGuardada = () =>
     falso.auth.getSession.mockResolvedValue({ data: { session: ana }, error: null });
-  // El resolver pide los contactos antes de activar /mis-contactos (siguen sobre HTTP).
-  const contestarContactos = async (contactos: Contacto[]) =>
-    (await vi.waitFor(() => http.expectOne(`${API}/contactos`))).flush(contactos);
+  // Lo que contesta la base de datos al resolver, que pide los contactos antes de activar
+  // /mis-contactos.
+  const hayContactos = (...filas: object[]) =>
+    falso.respuestaDe('contactos', { data: filas, error: null });
   // Deja que terminen las promesas pendientes (el canje de un code, la navegación que le sigue)
   // y el repintado que provocan.
   const reposar = async () => {
@@ -51,33 +48,33 @@ describe('rutas de la aplicación', () => {
 
   beforeEach(async () => {
     falso = crearSupabaseFalso();
+    hayContactos();
     TestBed.configureTestingModule({
-      // La configuración real de la aplicación (router con withComponentInputBinding() y
-      // HttpClient), con el backend HTTP de pruebas, la URL de la API y el cliente de
-      // Supabase sustituidos.
-      providers: [
-        ...appConfig.providers,
-        provideHttpClientTesting(),
-        { provide: API_URL, useValue: API },
-        { provide: SUPABASE, useValue: falso.cliente },
-      ],
+      // La configuración real de la aplicación (router con withComponentInputBinding()) con el
+      // cliente de Supabase sustituido por el falso.
+      providers: [...appConfig.providers, { provide: SUPABASE, useValue: falso.cliente }],
     });
-    http = TestBed.inject(HttpTestingController);
     harness = await RouterTestingHarness.create();
   });
-
-  afterEach(() => http.verify());
 
   describe('con sesión', () => {
     beforeEach(hayUnaSesionGuardada);
 
-    it('/mis-contactos resuelve los contactos y los entrega al componente como input', async () => {
-      const navegacion = harness.navigateByUrl('/mis-contactos', MisContactosComponent);
-      await contestarContactos([elon]);
-      const componente = await navegacion;
+    it('/mis-contactos resuelve los contactos con el falso, los entrega al componente como input y pinta los nombres', async () => {
+      hayContactos(filaElon, filaBill);
 
-      expect(componente.contactos()).toEqual([elon]);
-      expect(harness.routeNativeElement?.textContent).toContain('Elon Musk');
+      const componente = await harness.navigateByUrl('/mis-contactos', MisContactosComponent);
+
+      // El rol sale del usuario de la sesión: Elon es propio y Bill, compartido como editor.
+      expect(componente.contactos()).toEqual([
+        contactoVisibleDePrueba('propietario', camposElon),
+        contactoVisibleDePrueba('editor', camposBill),
+      ]);
+      expect(falso.consultas.map((consulta) => consulta.tabla)).toEqual(['contactos']);
+      const listas = harness.routeNativeElement!.querySelectorAll('lista-contactos');
+      expect(listas[0].textContent).toContain('Elon Musk');
+      expect(listas[1].textContent).toContain('Bill Gates');
+      expect(listas[1].querySelector('.rol')?.textContent).toBe('editor');
     });
 
     it('/nuevo-contacto muestra el formulario de alta', async () => {
@@ -87,9 +84,7 @@ describe('rutas de la aplicación', () => {
     });
 
     it('cualquier otra ruta redirige a /mis-contactos', async () => {
-      const navegacion = harness.navigateByUrl('/no-existe');
-      await contestarContactos([]);
-      await navegacion;
+      await harness.navigateByUrl('/no-existe');
 
       expect(url()).toBe('/mis-contactos');
     });
@@ -97,9 +92,7 @@ describe('rutas de la aplicación', () => {
     // Entrar, registrarse o pedir otra contraseña no tiene sentido con la sesión abierta.
     for (const ruta of ['/entrar', '/registro', '/auth/recuperar']) {
       it(`${ruta} redirige a /mis-contactos`, async () => {
-        const navegacion = harness.navigateByUrl(ruta, MisContactosComponent);
-        await contestarContactos([]);
-        await navegacion;
+        await harness.navigateByUrl(ruta, MisContactosComponent);
 
         expect(url()).toBe('/mis-contactos');
       });
@@ -132,7 +125,7 @@ describe('rutas de la aplicación', () => {
       await harness.navigateByUrl('/mis-contactos', EntrarComponent);
 
       expect(url()).toBe('/entrar');
-      http.expectNone(`${API}/contactos`);
+      expect(falso.cliente.from).not.toHaveBeenCalled();
     });
 
     it('/nuevo-contacto acaba en /entrar', async () => {
@@ -193,8 +186,9 @@ describe('rutas de la aplicación', () => {
         return { data: { session: ana, user: ana.user }, error: null };
       });
 
+      hayContactos(filaElon);
+
       await harness.navigateByUrl('/auth/confirmar?code=codigo-pkce', ConfirmarComponent);
-      await contestarContactos([elon]);
 
       await vi.waitFor(() => expect(url()).toBe('/mis-contactos'));
       await harness.fixture.whenStable();
@@ -224,8 +218,9 @@ describe('rutas de la aplicación', () => {
       // Con el canje terminado y la contraseña escrita, se puede guardar.
       await vi.waitFor(() => expect(guardar().disabled).toBe(false));
 
+      hayContactos(filaElon);
+
       guardar().click();
-      await contestarContactos([elon]);
 
       await vi.waitFor(() => expect(url()).toBe('/mis-contactos'));
       await harness.fixture.whenStable();
@@ -262,9 +257,7 @@ describe('rutas de la aplicación', () => {
       const direccion = url();
 
       // Con la sesión de recuperación abierta se puede salir por la barra de navegación…
-      const salida = harness.navigateByUrl('/mis-contactos', MisContactosComponent);
-      await contestarContactos([elon]);
-      await salida;
+      await harness.navigateByUrl('/mis-contactos', MisContactosComponent);
       // …y volver: el router abre otra vez esa dirección.
       await harness.navigateByUrl(direccion, NuevaContrasenaComponent);
       await reposar();

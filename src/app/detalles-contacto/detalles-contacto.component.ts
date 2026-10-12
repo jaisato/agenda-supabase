@@ -1,6 +1,6 @@
 import { Component, input, output } from '@angular/core';
 
-import { Contacto } from '../contacto';
+import { ContactoVisible } from '../contacto';
 
 @Component({
   selector: 'detalles-contacto',
@@ -11,13 +11,28 @@ import { Contacto } from '../contacto';
   preserveWhitespaces: true,
 })
 export class DetallesContactoComponent {
-  readonly contacto = input<Contacto | null>(null);
+  readonly contacto = input<ContactoVisible | null>(null);
 
   // Usamos la función 'output' para notificar datos de salida.
-  readonly eliminar = output<Contacto>();
+  readonly eliminar = output<ContactoVisible>();
   // Usamos 'emit' para notificar eventos.
-  notificarEliminacion(contacto: Contacto): void {
+  notificarEliminacion(contacto: ContactoVisible): void {
     this.eliminar.emit(contacto);
+  }
+
+  readonly editar = output<ContactoVisible>();
+  notificarEdicion(contacto: ContactoVisible): void {
+    this.editar.emit(contacto);
+  }
+
+  readonly compartir = output<ContactoVisible>();
+  notificarComparticion(contacto: ContactoVisible): void {
+    this.compartir.emit(contacto);
+  }
+
+  readonly dejarDeVer = output<ContactoVisible>();
+  notificarDejarDeVer(contacto: ContactoVisible): void {
+    this.dejarDeVer.emit(contacto);
   }
 
   readonly navegarFacebook = output<string>();
