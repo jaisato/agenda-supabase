@@ -115,6 +115,8 @@ create index contactos_compartidos_usuario_idx on public.contactos_compartidos (
 
 Los campos de texto del contacto son `not null default ''`, como el modelo `Contacto` actual
 (todo cadenas), para que el tipo generado siga siendo `string` y no `string | null`.
+`perfiles.nombre`, opcional, también tiene un máximo de 100 caracteres: el `check`
+`perfiles_nombre_longitud` lo añade una segunda migración, porque la inicial ya estaba aplicada.
 
 ### 5.2 Esquema `privado` (no expuesto en la Data API)
 
@@ -286,7 +288,7 @@ confirmación se leen ahí. `supabase/config.toml` replica confirmación activa,
 redirecciones.
 
 **Cuenta demo**: `demo@jasato.com` (contactos de ejemplo) e `invitado@jasato.com`, que comparte
-un contacto con `demo` como lector y recibe otro como editor, para que «compartidos conmigo»
+un contacto con `demo` como editor y recibe otro como lector, para que «compartidos conmigo»
 tenga contenido. Los crea `npm run seed:demo` (`scripts/seed-demo.mjs`: supabase-js con la Admin
 API, `email_confirm: true`, idempotente; lee `SUPABASE_URL` y `SUPABASE_SECRET_KEY` del entorno,
 nunca del repo) tanto en local como en el proyecto real. Credenciales de `demo` en el README;
@@ -302,8 +304,9 @@ fijada. Se eliminan `json-server`, `concurrently`, `server.mjs`, `db.json` y `ap
 **Configuración**: `src/environments/environment.ts` (producción: URL y publishable key del
 proyecto) y `environment.development.ts` (stack local: `http://127.0.0.1:54321` y su publishable
 key), con `fileReplacements` en `angular.json`. `src/app/supabase/supabase.client.ts` expone el
-cliente (`createClient<Database>(url, key, { auth: { flowType: 'pkce' } })`) como *provider*;
-`src/app/supabase/database.types.ts` lo genera `supabase gen types` y CI comprueba que está al día.
+cliente (`createClient<Database>(url, key, { auth: { flowType: 'pkce', detectSessionInUrl: false } })`)
+como *provider*; `src/app/supabase/database.types.ts` lo genera `supabase gen types` y CI comprueba
+que está al día.
 
 **Modelo**: `Contacto` = fila de `contactos` (tipo generado); `ContactoVisible = Contacto & { rol:
 'propietario' | 'lector' | 'editor' }`. Una sola consulta `contactos` con
@@ -357,10 +360,10 @@ rutas profundas (incluida `/auth/confirmar?code=…`) arranquen la SPA.
 
 **Una versión de la CLI**: `npx supabase` en local y en CI, desde la devDependency.
 
-**`ci.yml`** (en cada PR y push), dos jobs en paralelo:
+**`ci.yml`** (en cada PR y en cada push a `master`), dos jobs en paralelo:
 
 1. **App**: lo actual (`npm ci`, build, Vitest, `npm audit`).
-2. **Base de datos**: `npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector`
+2. **Base de datos**: `npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio`
    → `npx supabase db reset` (migraciones + `seed.sql`) → `npx supabase test db` →
    `npx supabase db lint --local --fail-on warning` →
    `npx supabase gen types --local --lang typescript -s public > src/app/supabase/database.types.ts`
@@ -368,10 +371,10 @@ rutas profundas (incluida `/auth/confirmar?code=…`) arranquen la SPA.
 
 **`deploy.yml`** (push a `master`, tras CI verde), en orden:
 
-1. **Migraciones**: `npx supabase link --project-ref $SUPABASE_PROJECT_REF` y
-   `npx supabase db push --linked`, con los secretos `SUPABASE_ACCESS_TOKEN` (PAT **acotado** a este
-   proyecto y a los permisos de migraciones, con caducidad) y `SUPABASE_DB_PASSWORD`; la
-   referencia del proyecto es una variable, no un secreto.
+1. **Migraciones**: `npx supabase link --project-ref $SUPABASE_PROJECT_REF --yes` y
+   `npx supabase db push --linked --yes`, con los secretos `SUPABASE_ACCESS_TOKEN` (PAT
+   **acotado** a este proyecto y a los permisos de migraciones, con caducidad) y
+   `SUPABASE_DB_PASSWORD`; la referencia del proyecto es una variable, no un secreto.
 2. **Frontend**: `ng build` de producción con `baseHref`, `404.html`,
    `actions/upload-pages-artifact` y `actions/deploy-pages`. Fuente de Pages: GitHub Actions.
 
@@ -412,17 +415,19 @@ requerido, y añadir `@supabase/supabase-js` y `supabase` a Dependabot (grupo de
 se cambia con `set local role authenticated` y `request.jwt.claims` (`sub`, `role`), que es lo que
 hace PostgREST. Ficheros:
 
-1. `01_esquema.sql`: tablas, RLS activada en las tres, enum, funciones de `privado`, y los GRANT
-   exactos (`anon` sin privilegios; `authenticated` con `insert`/`update` solo en columnas de datos;
-   ninguna función de `privado` ejecutable por `public`).
+1. `01_esquema.sql`: tablas, RLS activada en las tres y sus políticas exactas (todas solo para
+   `authenticated`), enum, funciones de `privado`, y los GRANT exactos (`anon` sin privilegios;
+   `authenticated` con `insert`/`update` solo en columnas de datos; ninguna función de `privado`
+   ejecutable por `public`).
 2. `02_contactos.sql`: A ve los suyos y B no; B no edita ni borra los de A (0 filas); insertar con
    `propietario_id` ajeno falla (`42501`).
 3. `03_compartir.sql`: tras la RPC como lector, B ve pero no edita; ascendido a editor, B edita el
    nombre pero su `update` de `propietario_id` falla con *permission denied*; B no borra, no
    comparte con C ni inserta en `contactos_compartidos`; B sí deja de ver; compartir con uno mismo
    o con un email inexistente devuelve el error previsto; como `anon`, todo falla.
-4. `04_perfiles.sql`: B no ve el perfil de A hasta que exista una compartición; C nunca los ve;
-   cada uno solo edita su `nombre`.
+4. `04_perfiles.sql`: B no ve el perfil de A hasta que exista una compartición; C, sin compartir
+   nada, no ve ninguno; B y C, que reciben contactos de A, no ven el perfil del otro; cada uno solo
+   edita su `nombre`, de 100 caracteres como mucho.
 
 **Lint y advisors**: `db lint` en CI; tras cada despliegue de migraciones, advisors de seguridad y
 rendimiento del proyecto (MCP `get_advisors`): cero avisos de RLS y `search_path` fijo en todas
@@ -433,7 +438,7 @@ las funciones.
 **Aceptación manual** (en la URL de Pages): registro con correo real vía Resend → confirmar →
 entrar → crear, editar, compartir con `demo@`, ver la etiqueta de rol desde la otra cuenta,
 ascender a editor y editar desde ella, revocar, borrar; recuperar contraseña; y comprobar que la
-Data API con la publishable key sin sesión devuelve vacío.
+Data API con la publishable key y sin sesión responde 401 con `42501` (`anon` no tiene privilegios).
 
 ## 10. Operación
 

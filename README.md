@@ -63,7 +63,8 @@ demo y está compartido con invitado como `lector`. Para ver cómo cambia la int
 - También puedes crear tu propia cuenta: la confirmas con el enlace que llega por correo.
 
 La cuenta demo es pública: cualquiera puede cambiar sus datos (ver
-[Decisiones y límites](#decisiones-y-límites)). `npm run seed:demo` los restaura.
+[Decisiones y límites](#decisiones-y-límites)). `npm run seed:demo` repone la contraseña, los
+contactos sembrados y las dos comparticiones (ver [Restaurar la demo](#restaurar-la-demo)).
 
 ## Arquitectura
 
@@ -233,7 +234,7 @@ borra también la demo, así que vuelve a lanzar `seed:demo`.
 | `npm run watch`             | `ng build --watch` con la configuración de desarrollo.             |
 | `npm test`                  | Vitest en modo _watch_ (en una terminal).                          |
 | `npm test -- --watch=false` | Una sola pasada (lo que ejecuta el CI).                            |
-| `npm run seed:demo`         | Crea o restaura la cuenta demo y sus datos.                        |
+| `npm run seed:demo`         | Crea o repone las cuentas y los datos sembrados de la demo.        |
 | `npm run ng -- <comando>`   | La CLI de Angular.                                                 |
 
 La CLI de Supabase se invoca siempre como `npx supabase`:
@@ -450,13 +451,20 @@ Límites:
 ### Restaurar la demo
 
 La cuenta demo es pública y cualquiera puede cambiar sus datos o su contraseña. `seed:demo` crea o
-actualiza `demo@jasato.com` e `invitado@jasato.com`, repone los cinco contactos y las dos
-comparticiones, y borra los demás contactos de esas dos cuentas (los de nadie más no se tocan).
-Contra el proyecto real hace falta la clave secreta de Supabase, solo en el entorno del comando
-(no la guardes en ningún fichero):
+actualiza `demo@jasato.com` e `invitado@jasato.com` con su contraseña (la pública de demo y una
+aleatoria para invitado), repone los cinco contactos sembrados y las dos comparticiones
+declaradas, y borra los demás contactos de esas dos cuentas (los de nadie más no se tocan). No lo
+deshace todo: no retira las comparticiones que añadan los visitantes (un contacto sembrado
+compartido con otra cuenta, o el de otra cuenta compartido con demo) ni repone `perfiles.nombre`.
+
+Contra el proyecto real hace falta la clave secreta de Supabase, solo en el entorno de la terminal:
+no la guardes en ningún fichero ni la escribas en la línea de comandos, que queda en el historial.
+`read -rs` la lee sin mostrarla:
 
 ```sh
-SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co SUPABASE_SECRET_KEY=<clave secreta> npm run seed:demo
+read -rs SUPABASE_SECRET_KEY && export SUPABASE_SECRET_KEY   # pega la clave y pulsa Intro
+SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co npm run seed:demo
+unset SUPABASE_SECRET_KEY
 ```
 
 ### Incidencias y rotaciones
@@ -475,7 +483,7 @@ SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co SUPABASE_SECRET_KEY=<clave
 
 - **Plan Free de Supabase.** Sin _branching_ ni backups automáticos: el esquema se reconstruye con
   las migraciones y la demo con `seed:demo`; si algún día hubiera datos que importen, habría que
-  hacer `supabase db dump` a mano. El proyecto se pausa tras una semana sin actividad real; ver
+  hacer `npx supabase db dump` a mano. El proyecto se pausa tras una semana sin actividad real; ver
   [`keep-alive.yml`](#operación).
 - **La RPC revela si existe la cuenta.** `compartir_contacto` responde «No hay ningún usuario con
   ese email» (`PT404`) cuando no hay cuenta con ese email, como hace Google Docs: es una decisión
@@ -491,7 +499,9 @@ SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co SUPABASE_SECRET_KEY=<clave
   de ser visible para quien se lo compartió.
 - **La cuenta demo es pública.** Cualquiera puede cambiar los datos y la contraseña de
   `demo@jasato.com`; la RLS limita el daño a lo que esa cuenta puede ver y editar. `seed:demo`
-  (idempotente) restaura los datos y la contraseña.
+  (idempotente) repone la contraseña, los contactos sembrados y las dos comparticiones, pero no
+  retira las comparticiones que añadan los visitantes ni repone `perfiles.nombre` (ver
+  [Restaurar la demo](#restaurar-la-demo)).
 - **Registro con un email ya registrado.** En local, GoTrue responde `user_already_exists` (HTTP
   422; la configuración local autoconfirma SMS) y la aplicación muestra «Ya existe una cuenta con
   ese email». En producción, con la confirmación de email activa, GoTrue lo oculta

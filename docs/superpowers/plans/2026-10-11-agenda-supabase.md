@@ -717,7 +717,8 @@ y variable); decisiones y límites (plan free, `keep-alive`, el mensaje de la RP
 cuenta); créditos del origen (KeepCoding). Commit: `docs: README como runbook de la agenda sobre Supabase`.
 
 - [ ] **Step 4: Abrir la PR `feat/supabase` → `master`** (`gh pr create`, cuerpo con el resumen y el pie de
-atribución), esperar CI en verde, fusionarla (`gh pr merge --merge`), y verificar `deploy.yml`:
+atribución), esperar CI en verde, proteger `master` (Step 7) y solo entonces fusionarla
+(`gh pr merge --merge`), y verificar `deploy.yml`:
 `gh api "repos/jaisato/agenda-supabase/actions/runs?branch=master&per_page=3"` → `Deploy success`;
 `curl -s -o /dev/null -w '%{http_code}' https://jaisato.github.io/agenda-supabase/` → `200`;
 `curl -s -H "apikey: <publishable>" https://zckmejrnscenxwiqykkh.supabase.co/rest/v1/contactos?select=id` →
@@ -729,7 +730,8 @@ sobre RLS, `search_path` o funciones expuestas; si aparece alguno, corregirlo co
 - [ ] **Step 6: Datos de demo en el proyecto real (autor, en su máquina):**
 `SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co SUPABASE_SECRET_KEY=<clave secreta> npm run seed:demo`.
 
-- [ ] **Step 7: Proteger `master`:** `gh api -X PUT repos/jaisato/agenda-supabase/branches/master/protection --input -`
+- [ ] **Step 7: Proteger `master`, antes de fusionar la PR del Step 4** (de esto depende «deploy tras
+CI verde»): `gh api -X PUT repos/jaisato/agenda-supabase/branches/master/protection --input -`
 con `{"required_status_checks":{"strict":true,"contexts":["Build, tests y npm audit","Base de datos"]},"enforce_admins":true,"required_pull_request_reviews":{"required_approving_review_count":0},"restrictions":null}`.
 
 - [ ] **Step 8: Aceptación manual (§9 de la spec)** en la URL de Pages, marcando cada punto: registro con
