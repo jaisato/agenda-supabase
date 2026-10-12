@@ -1,7 +1,7 @@
--- Esquema base de la agenda: tablas, funciones, triggers, RLS y privilegios (§5.1 a §5.3 del
--- diseño). Lo que hacen las políticas de cada tabla se prueba en los ficheros siguientes
--- (02_contactos.sql, …); aquí solo se comprueba que la RLS está activada y que aísla a un usuario
--- de los contactos de otro.
+-- Esquema base de la agenda: tablas, funciones, triggers, RLS, políticas y privilegios (§5.1 a §5.4
+-- del diseño). Lo que hacen las políticas de cada tabla se prueba en los ficheros siguientes
+-- (02_contactos.sql, …); aquí solo se comprueba que la RLS está activada, qué políticas hay y a qué
+-- rol se aplican, y que la RLS aísla a un usuario de los contactos de otro.
 --
 -- Todas las aserciones llevan descripción. Sin ella, pgTAP lee has_table('public', 'perfiles')
 -- como (tabla, descripción) y busca una tabla llamada «public».
@@ -9,7 +9,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(54);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -38,6 +38,42 @@ select is((select relrowsecurity from pg_class where oid = 'public.contactos'::r
   'RLS activada en contactos');
 select is((select relrowsecurity from pg_class where oid = 'public.contactos_compartidos'::regclass),
   true, 'RLS activada en contactos_compartidos');
+
+-- Políticas (§5.4). Lo que hacen se prueba en los ficheros siguientes; aquí se fija cuáles hay y a
+-- quién se aplican, para que no entre una política de más, ni una que valga para otro rol que
+-- authenticated, sin que falle un test.
+select policies_are('public', 'perfiles',
+  array['perfiles: ver el propio y las contrapartes', 'perfiles: editar el propio'],
+  'perfiles tiene exactamente sus dos políticas');
+select policies_are('public', 'contactos',
+  array['contactos: ver propios y compartidos', 'contactos: crear propios',
+        'contactos: editar el dueño o un editor', 'contactos: borrar el dueño'],
+  'contactos tiene exactamente sus cuatro políticas');
+select policies_are('public', 'contactos_compartidos',
+  array['compartidos: ver el compartido o el dueño', 'compartidos: cambiar rol el dueño',
+        'compartidos: revocar el dueño o dejar de ver'],
+  'contactos_compartidos tiene exactamente sus tres políticas');
+
+select policy_roles_are('public', 'perfiles', 'perfiles: ver el propio y las contrapartes',
+  array['authenticated'], '«perfiles: ver el propio y las contrapartes» es solo de authenticated');
+select policy_roles_are('public', 'perfiles', 'perfiles: editar el propio',
+  array['authenticated'], '«perfiles: editar el propio» es solo de authenticated');
+select policy_roles_are('public', 'contactos', 'contactos: ver propios y compartidos',
+  array['authenticated'], '«contactos: ver propios y compartidos» es solo de authenticated');
+select policy_roles_are('public', 'contactos', 'contactos: crear propios',
+  array['authenticated'], '«contactos: crear propios» es solo de authenticated');
+select policy_roles_are('public', 'contactos', 'contactos: editar el dueño o un editor',
+  array['authenticated'], '«contactos: editar el dueño o un editor» es solo de authenticated');
+select policy_roles_are('public', 'contactos', 'contactos: borrar el dueño',
+  array['authenticated'], '«contactos: borrar el dueño» es solo de authenticated');
+select policy_roles_are('public', 'contactos_compartidos',
+  'compartidos: ver el compartido o el dueño', array['authenticated'],
+  '«compartidos: ver el compartido o el dueño» es solo de authenticated');
+select policy_roles_are('public', 'contactos_compartidos', 'compartidos: cambiar rol el dueño',
+  array['authenticated'], '«compartidos: cambiar rol el dueño» es solo de authenticated');
+select policy_roles_are('public', 'contactos_compartidos',
+  'compartidos: revocar el dueño o dejar de ver', array['authenticated'],
+  '«compartidos: revocar el dueño o dejar de ver» es solo de authenticated');
 
 -- Privilegios (§5.3). column_privs_are cuenta también los privilegios de tabla, así que SELECT
 -- aparece en todas las columnas; lo que se comprueba es que INSERT y UPDATE solo estén donde toca.

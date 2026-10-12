@@ -7,14 +7,15 @@
 -- y lo de sus contrapartes) o, cuando los hace postgres, se filtran por los tres ids, para que el
 -- resultado no dependa de los datos que ya haya en la base local.
 --
--- A es el dueño del contacto c1 y lo comparte con B; C no participa en ninguna compartición. Las
--- comparticiones las crea la RPC compartir_contacto (se prueba a fondo en 03_compartir.sql): aquí
--- solo hace falta que exista una entre A y B.
+-- A es el dueño del contacto c1 y lo comparte con B; C no participa en ninguna compartición hasta
+-- el final, cuando A también le comparte c1: B y C reciben el mismo contacto del mismo dueño y aun
+-- así no son contrapartes entre sí. Las comparticiones las crea la RPC compartir_contacto (se prueba
+-- a fondo en 03_compartir.sql).
 begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(16);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -77,6 +78,22 @@ select pruebas.autenticar('b@test.local');
 select results_eq(
   $$select nombre from public.perfiles where id = pruebas.id_usuario('a@test.local')$$,
   array['Ana'], 'B ve el nombre nuevo de A');
+
+-- A comparte c1 también con C. Quienes reciben contactos del mismo dueño no son contrapartes entre
+-- sí: B y C ven su propio perfil y el de A, pero no el del otro.
+select pruebas.autenticar('a@test.local');
+select lives_ok(
+  $$select public.compartir_contacto((select id from public.contactos where nombre = 'Ada'),
+                                     'c@test.local', 'lector')$$,
+  'A comparte c1 también con C');
+select pruebas.autenticar('b@test.local');
+select results_eq($$select email from public.perfiles order by email$$,
+  $$values ('a@test.local'), ('b@test.local')$$,
+  'B ve su perfil y el de A, pero no el de C, que recibe el mismo contacto');
+select pruebas.autenticar('c@test.local');
+select results_eq($$select email from public.perfiles order by email$$,
+  $$values ('a@test.local'), ('c@test.local')$$,
+  'C ve su perfil y el de A, pero no el de B, que recibe el mismo contacto');
 
 -- El email de perfiles sigue al de auth.users: el trigger crear_perfil lo actualiza cuando cambia
 -- el email del usuario. Tras el cambio ya no existe a@test.local, así que el perfil se busca con

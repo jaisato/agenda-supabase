@@ -271,9 +271,10 @@ crea sus usuarios con `pruebas.crear_usuario(…)` y cambia de identidad con
 como hace PostgREST. Esos helpers `pruebas.*` viven en `supabase/seed.sql`: existen en las bases
 locales y nunca se despliegan.
 
-- `01_esquema.sql`: tablas, enum y funciones; RLS activada en las tres tablas; los privilegios
-  exactos (`anon` sin ninguno, `authenticated` con `insert` y `update` solo en las columnas de
-  datos); el `EXECUTE` de las funciones de `privado`, y que ninguna sea ejecutable por `public`.
+- `01_esquema.sql`: tablas, enum y funciones; RLS activada en las tres tablas; las políticas
+  exactas de cada tabla, todas solo para `authenticated`; los privilegios exactos (`anon` sin
+  ninguno, `authenticated` con `insert` y `update` solo en las columnas de datos); el `EXECUTE` de
+  las funciones de `privado`, y que ninguna sea ejecutable por `public`.
 - `02_contactos.sql`: cada usuario ve y toca solo lo suyo (otro usuario no ve, edita ni borra sus
   contactos); insertar un contacto a nombre de otro falla con `42501`; semántica de lector y
   editor; borrar un contacto borra sus comparticiones; `anon` no lee.
@@ -283,7 +284,8 @@ locales y nunca se despliegan.
   mismo o con un email sin cuenta da el error previsto; el email con mayúsculas y espacios se
   encuentra; volver a compartir cambia el rol sin duplicar; `anon` no ejecuta la RPC.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
-  tercero nunca; cada uno solo edita su `nombre`; el email del perfil sigue al de `auth.users`.
+  tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`; el
+  email del perfil sigue al de `auth.users`.
 
 **Sin sesión no se ve nada.** Con el stack local en marcha:
 
