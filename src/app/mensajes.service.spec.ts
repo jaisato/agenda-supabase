@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { AuthApiError, PostgrestError } from '@supabase/supabase-js';
+import { AuthApiError, AuthRetryableFetchError, PostgrestError } from '@supabase/supabase-js';
 
 import { MensajesService } from './mensajes.service';
 
@@ -106,13 +106,45 @@ describe('MensajesService', () => {
       );
     });
 
-    it('un error sin código (o con código null) también cae en «Algo ha fallado»', () => {
-      expect(service.deError({ message: 'Failed to fetch' })).toBe(
-        'Algo ha fallado: Failed to fetch',
-      );
-      expect(service.deError({ code: null, message: 'Failed to fetch' })).toBe(
-        'Algo ha fallado: Failed to fetch',
-      );
+    it('un error sin código (ausente, null o vacío, como lo deja PostgREST) también cae en «Algo ha fallado»', () => {
+      for (const code of [undefined, null, '']) {
+        expect(
+          service.deError({ code, message: 'SyntaxError: Unexpected end of JSON input' }),
+        ).toBe('Algo ha fallado: SyntaxError: Unexpected end of JSON input');
+      }
+    });
+
+    describe('sin conexión con el servidor (sin red o con el proyecto pausado)', () => {
+      // supabase-js no lanza el TypeError de fetch(): PostgREST lo devuelve como un error con code
+      // vacío y el nombre delante, y Auth como un AuthRetryableFetchError con status 0. El texto
+      // depende del navegador: Chrome, Firefox y Safari.
+      const deFetch = [
+        'Failed to fetch',
+        'NetworkError when attempting to fetch resource.',
+        'Load failed',
+      ];
+
+      it('el error de PostgREST dice «No hay conexión con el servidor», no el TypeError en inglés', () => {
+        for (const mensaje of deFetch) {
+          const deLaBase = { message: `TypeError: ${mensaje}`, details: '', hint: '', code: '' };
+
+          expect(service.deError(deLaBase)).toBe('No hay conexión con el servidor');
+        }
+      });
+
+      it('el de Auth, también', () => {
+        for (const mensaje of deFetch) {
+          expect(service.deError(new AuthRetryableFetchError(mensaje, 0))).toBe(
+            'No hay conexión con el servidor',
+          );
+        }
+      });
+
+      it('un TypeError que no es de fetch() sigue en «Algo ha fallado»', () => {
+        const fallo = "TypeError: Cannot read properties of null (reading 'email')";
+
+        expect(service.deError({ code: '', message: fallo })).toBe(`Algo ha fallado: ${fallo}`);
+      });
     });
 
     it('P0002 ya no es el código de «no hay usuario»: la RPC usa PT404', () => {

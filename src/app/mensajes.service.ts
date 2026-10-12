@@ -3,6 +3,15 @@ import { Injectable, signal } from '@angular/core';
 export type Mensaje = { tipo: 'error' | 'exito'; texto: string };
 
 /**
+ * El mensaje del TypeError de fetch() cuando la petición no llega al servidor (sin red, o con el
+ * proyecto pausado), en Chrome, Firefox y Safari. supabase-js no lanza ese error: PostgREST lo
+ * devuelve con code vacío y el nombre delante («TypeError: Failed to fetch») y Auth, como un
+ * AuthRetryableFetchError sin code y con el mensaje tal cual.
+ */
+const SIN_CONEXION =
+  /^(TypeError: )?(Failed to fetch|NetworkError when attempting to fetch resource|Load failed)/;
+
+/**
  * El único aviso visible de la aplicación (lo pinta app.component.html) y la traducción a texto
  * legible de los errores de PostgREST y de Supabase Auth.
  */
@@ -23,10 +32,14 @@ export class MensajesService {
   }
 
   /**
-   * Texto para mostrar de un error de Supabase (`PostgrestError` o `AuthError`). Se decide siempre
-   * por `error.code`, nunca por el estado HTTP: varios errores distintos comparten estado.
+   * Texto para mostrar de un error de Supabase (`PostgrestError` o `AuthError`). Se decide por
+   * `error.code`, nunca por el estado HTTP: varios errores distintos comparten estado. Solo un error
+   * sin code se reconoce por su mensaje: el de fetch() cuando no hay conexión.
    */
   deError(error: { code?: string | null; message: string }): string {
+    if (!error.code && SIN_CONEXION.test(error.message)) {
+      return 'No hay conexión con el servidor';
+    }
     switch (error.code) {
       case '42501':
         return 'No tienes permiso para hacer eso';

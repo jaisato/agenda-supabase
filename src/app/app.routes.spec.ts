@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { AuthPKCECodeVerifierMissingError, Session } from '@supabase/supabase-js';
+import { AuthPKCECodeVerifierMissingError, PostgrestError, Session } from '@supabase/supabase-js';
 
 import { appConfig } from './app.config';
 import { ConfirmarComponent } from './auth/confirmar/confirmar.component';
@@ -190,6 +190,70 @@ describe('rutas de la aplicación', () => {
         texto: 'Solo el propietario puede compartir',
       });
       expect(falso.consultas.map((consulta) => consulta.tabla)).toEqual(['contactos']);
+    });
+
+    // Sin manejador, el router cancela la navegación y el error solo llega a la consola: la
+    // pantalla se queda como estaba, o en blanco si es la primera.
+    describe('si falla un resolver (sin red, proyecto pausado, sesión caducada…)', () => {
+      // Lo que devuelve PostgREST cuando la petición no llega al servidor.
+      const sinConexion = new PostgrestError({
+        message: 'TypeError: Failed to fetch',
+        details: '',
+        hint: '',
+        code: '',
+      });
+      const aviso = () => TestBed.inject(MensajesService).mensaje();
+      // El resolver de /mis-contactos falla la primera vez. Si se repitiera, la segunda iría bien y
+      // la navegación acabaría en /mis-contactos (sin esto, un bucle de reintentos no terminaría).
+      const fallaLaListaUnaVez = () =>
+        vi
+          .spyOn(TestBed.inject(ContactosService), 'obtenerContactos')
+          .mockRejectedValueOnce(sinConexion)
+          .mockResolvedValue([]);
+
+      it('el de otra ruta avisa del error y lleva a /mis-contactos', async () => {
+        // Un :id que no es un uuid: la base de datos contesta 22P02.
+        falso.respuestaDe('contactos', {
+          data: null,
+          error: new PostgrestError({
+            message: 'invalid input syntax for type uuid: "no-es-un-uuid"',
+            details: '',
+            hint: '',
+            code: '22P02',
+          }),
+        });
+        // El falso contesta lo mismo a todas las consultas de la tabla y eso no vale para la lista
+        // de /mis-contactos, a la que se vuelve: esa se sustituye.
+        vi.spyOn(TestBed.inject(ContactosService), 'obtenerContactos').mockResolvedValue([]);
+
+        await harness.navigateByUrl('/contactos/no-es-un-uuid/editar', MisContactosComponent);
+
+        expect(url()).toBe('/mis-contactos');
+        expect(aviso()).toEqual({
+          tipo: 'error',
+          texto: 'Algo ha fallado: invalid input syntax for type uuid: "no-es-un-uuid"',
+        });
+      });
+
+      it('el de /mis-contactos avisa y se queda donde estaba, sin repetirlo: volver a /mis-contactos sería un bucle', async () => {
+        await harness.navigateByUrl('/nuevo-contacto', NuevoContactoComponent);
+        const obtenerContactos = fallaLaListaUnaVez();
+
+        await expect(harness.navigateByUrl('/mis-contactos')).rejects.toBe(sinConexion);
+
+        expect(url()).toBe('/nuevo-contacto');
+        expect(aviso()).toEqual({ tipo: 'error', texto: 'No hay conexión con el servidor' });
+        expect(obtenerContactos).toHaveBeenCalledOnce();
+      });
+
+      it('el de /mis-contactos tampoco se repite cuando se llega por la redirección de otra ruta', async () => {
+        const obtenerContactos = fallaLaListaUnaVez();
+
+        await expect(harness.navigateByUrl('/no-existe')).rejects.toBe(sinConexion);
+
+        expect(aviso()).toEqual({ tipo: 'error', texto: 'No hay conexión con el servidor' });
+        expect(obtenerContactos).toHaveBeenCalledOnce();
+      });
     });
 
     it('cualquier otra ruta redirige a /mis-contactos', async () => {
