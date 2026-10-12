@@ -7,8 +7,10 @@ import { NuevaContrasenaComponent } from './auth/nueva-contrasena/nueva-contrase
 import { RecuperarComponent } from './auth/recuperar/recuperar.component';
 import { RegistroComponent } from './auth/registro/registro.component';
 import { authGuard, sinSesionGuard } from './auth/auth.guard';
+import { EditarContactoComponent } from './editar-contacto/editar-contacto.component';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
+import { contactoResolver } from './contacto.resolver';
 import { contactosResolver } from './contactos.resolver';
 
 // Definimos la rutas de nuestra aplicacion
@@ -34,6 +36,14 @@ export const routes: Routes = [
     path: 'nuevo-contacto',
     component: NuevoContactoComponent,
     canActivate: [authGuard],
+  },
+  {
+    path: 'contactos/:id/editar',
+    component: EditarContactoComponent,
+    canActivate: [authGuard],
+    resolve: {
+      contacto: contactoResolver,
+    },
   },
   // "**" define la ruta por defecto y se pone al final porque matchea con cualquier ruta introducida
   {

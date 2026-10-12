@@ -9,6 +9,8 @@ import { EntrarComponent } from './auth/entrar/entrar.component';
 import { NuevaContrasenaComponent } from './auth/nueva-contrasena/nueva-contrasena.component';
 import { RecuperarComponent } from './auth/recuperar/recuperar.component';
 import { RegistroComponent } from './auth/registro/registro.component';
+import { ContactosService } from './contactos.service';
+import { EditarContactoComponent } from './editar-contacto/editar-contacto.component';
 import { MensajesService } from './mensajes.service';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
@@ -83,6 +85,54 @@ describe('rutas de la aplicación', () => {
       expect(harness.routeNativeElement?.querySelector('form #nombre')).not.toBeNull();
     });
 
+    it('/contactos/:id/editar resuelve el contacto por su id, lo entrega al componente como input y rellena el formulario', async () => {
+      // maybeSingle: una fila, no una lista.
+      falso.respuestaDe('contactos', { data: filaBill, error: null });
+
+      const componente = await harness.navigateByUrl(
+        '/contactos/c2/editar',
+        EditarContactoComponent,
+      );
+      await reposar();
+
+      // El resolver pide el contacto del :id (con su compartición, de donde sale el rol).
+      expect(falso.consultas).toEqual([
+        {
+          tabla: 'contactos',
+          cadena: [
+            { metodo: 'select', args: ['*, contactos_compartidos(usuario_id, rol)'] },
+            { metodo: 'eq', args: ['id', 'c2'] },
+            { metodo: 'maybeSingle', args: [] },
+          ],
+        },
+      ]);
+      expect(componente.contacto()).toEqual(contactoVisibleDePrueba('editor', camposBill));
+      const formulario = harness.routeNativeElement!;
+      expect(formulario.querySelector<HTMLInputElement>('form #nombre')?.value).toBe('Bill');
+      expect(formulario.querySelector<HTMLInputElement>('form #apellidos')?.value).toBe('Gates');
+      expect(formulario.querySelector('form button[type="submit"]')?.textContent?.trim()).toBe(
+        'Guardar',
+      );
+    });
+
+    // Review Focus 5: el dueño borró el contacto (con él, las comparticiones) y quien lo tenía
+    // compartido intenta editarlo.
+    it('/contactos/:id/editar de un contacto que ya no existe lleva a /mis-contactos con el aviso', async () => {
+      // El resolver recibe data null (maybeSingle sin fila). El falso contesta lo mismo a todas las
+      // consultas de la tabla y eso no vale para la lista de /mis-contactos, a la que se vuelve:
+      // esa se sustituye.
+      falso.respuestaDe('contactos', { data: null, error: null });
+      vi.spyOn(TestBed.inject(ContactosService), 'obtenerContactos').mockResolvedValue([]);
+
+      await harness.navigateByUrl('/contactos/c9/editar', EditarContactoComponent);
+
+      await vi.waitFor(() => expect(url()).toBe('/mis-contactos'));
+      expect(TestBed.inject(MensajesService).mensaje()).toEqual({
+        tipo: 'error',
+        texto: 'Ese contacto ya no existe o no tienes acceso',
+      });
+    });
+
     it('cualquier otra ruta redirige a /mis-contactos', async () => {
       await harness.navigateByUrl('/no-existe');
 
@@ -132,6 +182,13 @@ describe('rutas de la aplicación', () => {
       await harness.navigateByUrl('/nuevo-contacto', EntrarComponent);
 
       expect(url()).toBe('/entrar');
+    });
+
+    it('/contactos/:id/editar acaba en /entrar, sin pedir el contacto', async () => {
+      await harness.navigateByUrl('/contactos/c2/editar', EntrarComponent);
+
+      expect(url()).toBe('/entrar');
+      expect(falso.cliente.from).not.toHaveBeenCalled();
     });
 
     // `**` redirige a /mis-contactos y el guard de esa ruta, a /entrar: sin la ruta /entrar

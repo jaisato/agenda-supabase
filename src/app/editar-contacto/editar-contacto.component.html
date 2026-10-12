@@ -1,0 +1,5 @@
+<!-- Formulario de edición: el mismo que el de alta, con los valores del contacto -->
+@if (editable(); as contacto) {
+  <formulario-contacto [inicial]="contacto" textoBoton="Guardar" (guardar)="guardar($event)">
+  </formulario-contacto>
+}
