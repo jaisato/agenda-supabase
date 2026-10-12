@@ -1,22 +1,112 @@
 name: Keep alive
 
-# El plan gratuito de Supabase pausa el proyecto tras una semana sin actividad. Una petición
-# semanal a su API (los lunes a las 06:17 UTC) lo mantiene despierto. También se puede lanzar a
-# mano desde la pestaña Actions.
+# Evita que Supabase pause el proyecto del plan gratuito.
+#
+# Supabase pausa un proyecto Free que durante una semana no recibe suficiente actividad de usuario
+# en la base de datos; según su documentación, bastan unas pocas peticiones de usuario a la base
+# de datos cada día (https://supabase.com/docs/guides/platform/free-project-pausing). Una petición
+# a /auth/v1/health no cuenta: GoTrue contesta con un JSON fijo sin consultar Postgres. Por eso este
+# workflow entra como la cuenta demo, lee un contacto con la API REST (PostgREST ejecuta una
+# consulta en Postgres, con RLS) y cierra su sesión.
+#
+# Corre dos veces al día (06:17 y 18:17 UTC), no una por semana: la ventana de Supabase es de siete
+# días y una sola ejecución semanal no deja margen si GitHub retrasa u omite alguna ejecución
+# programada. También se puede lanzar a mano desde la pestaña Actions.
+#
+# Usa la cuenta demo pública (su contraseña está en el README, no es un secreto). Si alguien la
+# cambia, el workflow falla: es la señal visible, y `npm run seed:demo` la restaura.
+#
+# GitHub desactiva los workflows programados de un repositorio público si pasan 60 días sin
+# actividad en él; se reactivan en la pestaña Actions (o con `gh workflow enable`).
 on:
   schedule:
-    - cron: '17 6 * * 1'
+    - cron: '17 6,18 * * *'
   workflow_dispatch:
 
-# Sin acceso al repositorio: solo hace una petición HTTP.
+# Sin acceso al repositorio: solo hace peticiones HTTP a Supabase.
 permissions: {}
 
 jobs:
-  ping:
-    name: Petición a Supabase
+  actividad:
+    name: Actividad en la base de datos
     runs-on: ubuntu-latest
     steps:
-      # La publishable key es pública por diseño (viaja en el JS del navegador): no es un secreto.
-      # Bloque literal (|): el «: » de la cabecera apikey rompería un escalar plano de YAML.
-      - run: |
-          curl -fsS -H "apikey: sb_publishable_Dn4i5OCgsn8KRuXrVX_70A_oXKbs-Bc" https://zckmejrnscenxwiqykkh.supabase.co/auth/v1/health
+      - name: Entrar como demo, leer un contacto y cerrar la sesión
+        # Todo lo de env es público: la publishable key viaja en el JS del navegador y la cuenta
+        # demo es pública. Por eso puede verse en el log. El mismo script se prueba en local
+        # cambiando estas variables (URL y publishable key del stack local).
+        env:
+          SUPABASE_URL: https://zckmejrnscenxwiqykkh.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_Dn4i5OCgsn8KRuXrVX_70A_oXKbs-Bc
+          DEMO_EMAIL: demo@jasato.com
+          DEMO_PASSWORD: agenda-demo-2026
+        run: |
+          set -euo pipefail
+
+          # Todas las peticiones: sin barra de progreso pero mostrando los errores (-sS), fallo si
+          # el HTTP es >= 400 (-f), 30 s como máximo por intento y hasta 3 reintentos (con -f, un
+          # 4xx o un 5xx también cuenta como error y se reintenta).
+          curl_base=(curl -fsS --max-time 30 --retry 3 --retry-all-errors)
+
+          # 1. Entrar como la cuenta demo. El cuerpo se construye con jq para escapar bien los
+          #    valores. De la respuesta, que lleva el token de acceso y el de refresco, no se
+          #    imprime nada.
+          cuerpo=$(jq -n --arg email "$DEMO_EMAIL" --arg password "$DEMO_PASSWORD" \
+            '{email: $email, password: $password}')
+          if ! respuesta=$("${curl_base[@]}" -X POST \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H 'Content-Type: application/json' \
+            -d "$cuerpo" \
+            "$SUPABASE_URL/auth/v1/token?grant_type=password"); then
+            echo "::error::No se pudo entrar como $DEMO_EMAIL; el error de curl está encima." \
+              "Con un 400, la cuenta demo ya no existe o su contraseña cambió: restáurala con" \
+              "'npm run seed:demo'. Con otro error, Supabase no responde."
+            exit 1
+          fi
+          # Sin access_token (ausente, null, vacío o respuesta que no es JSON), token queda vacío.
+          token=$(jq -r '.access_token // empty' <<<"$respuesta" 2>/dev/null || true)
+          if [ -z "$token" ]; then
+            echo "::error::La respuesta de /auth/v1/token no trae access_token."
+            exit 1
+          fi
+          # El runner de Actions oculta el valor en el log desde esta línea. Fuera de Actions (al
+          # probar el script en local) no se imprime, para no dejar el token en la terminal.
+          if [ "${GITHUB_ACTIONS:-}" = true ]; then
+            echo "::add-mask::$token"
+          fi
+          echo "Sesión iniciada como $DEMO_EMAIL."
+
+          # Con la sesión abierta, se cierra al terminar, haya ido bien la lectura o no. Solo esta
+          # sesión (scope=local): sin él, GoTrue cierra todas las de la cuenta, también las de
+          # quien esté probando la demo. Si el cierre falla, avisa pero no cambia el resultado.
+          cerrar_sesion() {
+            if "${curl_base[@]}" -o /dev/null -X POST \
+              -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+              -H "Authorization: Bearer $token" \
+              "$SUPABASE_URL/auth/v1/logout?scope=local"; then
+              echo "Sesión cerrada."
+            else
+              echo "::warning::No se pudo cerrar la sesión de $DEMO_EMAIL;" \
+                "el resultado del workflow no cambia."
+            fi
+          }
+          trap cerrar_sesion EXIT
+
+          # 2. La actividad que cuenta: PostgREST ejecuta esta consulta en Postgres como
+          #    `authenticated`, con RLS.
+          if ! codigo=$("${curl_base[@]}" -o /dev/null -w '%{http_code}' \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Authorization: Bearer $token" \
+            "$SUPABASE_URL/rest/v1/contactos?select=id&limit=1"); then
+            echo "::error::Falló la lectura de contactos con la sesión de $DEMO_EMAIL;" \
+              "el error de curl está encima."
+            exit 1
+          fi
+          echo "GET /rest/v1/contactos?select=id&limit=1 -> HTTP $codigo"
+          case "$codigo" in
+            2??) ;;
+            *)
+              echo "::error::La lectura de contactos devolvió HTTP $codigo, no 2xx."
+              exit 1
+              ;;
+          esac
