@@ -301,8 +301,8 @@ no tiene ningún privilegio. Contra producción es lo mismo con la URL y la publ
 
 ### CI
 
-[`ci.yml`](.github/workflows/ci.yml) corre en cada PR y en los push a `master` y `feat/**`, con dos
-jobs en paralelo. Son los dos checks que exige la protección de `master`.
+[`ci.yml`](.github/workflows/ci.yml) corre en cada PR y en los push a `master`, con dos jobs en
+paralelo. Son los dos checks que exige la protección de `master`.
 
 - **«Build, tests y npm audit»**: `npm ci`, `npx ng build`, `npx ng test --watch=false` y
   `npm audit --audit-level=low`.
@@ -311,7 +311,8 @@ jobs en paralelo. Son los dos checks que exige la protección de `master`.
   y ejecuta `npx supabase db reset`, `npx supabase test db`,
   `npx supabase db lint --local --fail-on warning` y la comprobación de que
   `src/app/supabase/database.types.ts` coincide con el esquema (`gen types` seguido de
-  `git diff --exit-code`).
+  `git diff --exit-code`). Tiene un límite de 15 minutos: un arranque colgado no ocupa el runner
+  las 6 horas que GitHub da por defecto a un job.
 
 ## Migraciones
 
@@ -353,11 +354,15 @@ Al fusionar en `master`, `deploy.yml` aplica las migraciones nuevas al proyecto 
 Todo cambio entra por PR. Al fusionar en `master`, [`deploy.yml`](.github/workflows/deploy.yml) se
 ejecuta con dos jobs encadenados:
 
-1. **`migraciones`**: `npm ci` y, en un solo paso, `npx supabase link --project-ref "$SUPABASE_PROJECT_REF"`
-   y `npx supabase db push --linked`. `db push` aplica solo las migraciones pendientes de
-   `supabase/migrations` (si no hay ninguna, no hace nada) y no ejecuta `supabase/seed.sql`, así
-   que los helpers `pruebas.*` no llegan a producción. Los secretos `SUPABASE_ACCESS_TOKEN` y
-   `SUPABASE_DB_PASSWORD` y la variable `SUPABASE_PROJECT_REF` llegan solo a ese paso.
+1. **`migraciones`**: `npm ci` y, en un solo paso,
+   `npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --yes` y
+   `npx supabase db push --linked --yes` (`--yes` contesta a las preguntas de la CLI, como la
+   confirmación de las migraciones que se van a aplicar: en CI no hay nadie que las conteste).
+   `db push` aplica solo las migraciones pendientes de `supabase/migrations` (si no hay ninguna, no
+   hace nada) y no ejecuta `supabase/seed.sql`, así que los helpers `pruebas.*` no llegan a
+   producción. Los secretos `SUPABASE_ACCESS_TOKEN` y `SUPABASE_DB_PASSWORD` y la variable
+   `SUPABASE_PROJECT_REF` llegan solo a ese paso. El job solo tiene permiso de lectura sobre el
+   repositorio (los de Pages son del job siguiente) y un límite de 15 minutos.
 2. **`pages`** (`needs: migraciones`: si las migraciones fallan, el frontend no se publica):
    `npm run build:pages`, copia de `index.html` a `404.html` y despliegue en Pages
    (`configure-pages`, `upload-pages-artifact` y `deploy-pages`). La copia sirve para que los

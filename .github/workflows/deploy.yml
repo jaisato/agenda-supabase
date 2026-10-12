@@ -21,6 +21,13 @@ jobs:
   migraciones:
     name: Migraciones
     runs-on: ubuntu-latest
+    # Un db push tarda segundos. Sin límite, uno colgado bloquearía el grupo deploy hasta las 6 horas
+    # que GitHub da por defecto a un job.
+    timeout-minutes: 15
+    # Solo lee el repositorio: pages e id-token son del job pages, y este es el que lleva los secretos
+    # de la base de datos.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,15 +40,17 @@ jobs:
 
       - run: npm ci
 
-      # Los secretos solo llegan a este paso, no al resto del job.
+      # Los secretos solo llegan a este paso, no al resto del job. --yes contesta que sí a las
+      # preguntas de la CLI (db push pide confirmar las migraciones que va a aplicar): en CI no hay
+      # nadie que las conteste.
       - name: Enlazar con el proyecto y aplicar las migraciones
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
         run: |
-          npx supabase link --project-ref "$SUPABASE_PROJECT_REF"
-          npx supabase db push --linked
+          npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --yes
+          npx supabase db push --linked --yes
 
   pages:
     name: GitHub Pages

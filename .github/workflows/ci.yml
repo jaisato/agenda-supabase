@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    # master y las ramas feat/**: así el trabajo de una rama se prueba antes de abrir la PR.
-    branches: [master, 'feat/**']
+    # Solo master: las ramas se prueban con el evento pull_request de su PR. Con los push de las
+    # ramas también, cada push a una rama con la PR abierta lanzaría el CI dos veces.
+    branches: [master]
   pull_request:
 
 permissions:
@@ -42,6 +43,9 @@ jobs:
   base-de-datos:
     name: Base de datos
     runs-on: ubuntu-latest
+    # Arrancar el stack y probar tarda unos minutos. Sin límite, un arranque colgado ocuparía el
+    # runner hasta las 6 horas que GitHub da por defecto a un job.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
