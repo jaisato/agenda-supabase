@@ -8,7 +8,8 @@
     "build": "ng build",
     "build:pages": "ng build --base-href /agenda-supabase/",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "seed:demo": "node scripts/seed-demo.mjs"
   },
   "private": true,
   "packageManager": "npm@11.19.0",
