@@ -70,6 +70,25 @@ describe('FormularioContactoComponent', () => {
     expect(boton().disabled).toBe(true);
   });
 
+  it('cada campo admite como mucho la longitud que deja la base de datos: si se pasa, no se puede añadir', async () => {
+    // Los check de contactos en supabase/migrations/20261011114625_inicial.sql.
+    expect(campos.map((id) => campo(id).maxLength)).toEqual([100, 100, 254, 30, 100, 100]);
+
+    // El navegador no deja teclear más; un valor puesto por código lo frena el validador.
+    await escribir({ ...tim, nombre: 'x'.repeat(101) });
+
+    expect(boton().disabled).toBe(true);
+  });
+
+  it('mientras enviando es true, el botón no se puede pulsar aunque el formulario sea válido', async () => {
+    await escribir(tim);
+
+    fixture.componentRef.setInput('enviando', true);
+    await fixture.whenStable();
+
+    expect(boton().disabled).toBe(true);
+  });
+
   it('muestra los mensajes de campo obligatorio solo tras tocar el campo vacío', async () => {
     expect(errores()).toEqual([]);
 

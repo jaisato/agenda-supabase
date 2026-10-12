@@ -490,10 +490,11 @@ SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co SUPABASE_SECRET_KEY=<clave
   (anti-enumeración) y la pantalla muestra igualmente «Revisa tu correo».
 - **Los enlaces de los correos se abren en el mismo navegador en que se pidieron.** Es el flujo
   PKCE: el `code_verifier` se guarda en el navegador que inició el registro o la recuperación, y
-  sin él no se puede canjear el `code`. El enlace de confirmación abierto en otro navegador sí
-  confirma la cuenta (lo hace el servidor al abrirlo), pero no abre sesión y la pantalla dice
-  «No hemos podido confirmar la cuenta. El enlace puede haber caducado.»: entra con tu email y tu
-  contraseña. Un enlace de recuperación hay que pedirlo de nuevo.
+  sin él no se puede canjear el `code`; por eso las dos pantallas lo recuerdan al enviar el correo.
+  El enlace de confirmación abierto en otro navegador sí confirma la cuenta (lo hace el servidor
+  al abrirlo), pero no abre sesión, y la pantalla lo explica: «No hemos podido confirmar la cuenta.
+  El enlace puede haber caducado. Si lo abriste en otro navegador o dispositivo, la cuenta ya está
+  confirmada: entra con tu email y contraseña.» Un enlace de recuperación hay que pedirlo de nuevo.
 - **`seed:demo` solo gestiona usuarios creados por GoTrue**, no insertados a mano por SQL en
   `auth.users`: GoTrue no sabe listar esas filas y `seed:demo` falla con «Database error finding
   users». Los tests pgTAP los insertan a mano, pero dentro de transacciones que se deshacen.

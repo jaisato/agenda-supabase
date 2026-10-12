@@ -164,7 +164,7 @@ describe('MisContactosComponent', () => {
 
       await clic(accion('Eliminar contacto'));
 
-      expect(confirmar).toHaveBeenCalledWith('¿Estas seguro de eliminar a Tim?');
+      expect(confirmar).toHaveBeenCalledWith('¿Estás seguro de eliminar a Tim?');
       expect(falso.consultas).toEqual([
         {
           tabla: 'contactos',

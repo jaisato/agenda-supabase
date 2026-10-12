@@ -9,7 +9,11 @@ import { SupabaseFalso, crearSupabaseFalso } from '../../testing/supabase-falso'
 import { ConfirmarComponent } from './confirmar.component';
 
 const ana = { access_token: 'token-u1', user: { id: 'u1', email: 'ana@test.es' } } as Session;
-const noSePudoConfirmar = 'No hemos podido confirmar la cuenta. El enlace puede haber caducado.';
+// Si el enlace se abre en otro navegador, GoTrue ya ha confirmado la cuenta, pero sin el
+// code_verifier de PKCE el canje falla: el texto tiene que decirlo.
+const noSePudoConfirmar =
+  'No hemos podido confirmar la cuenta. El enlace puede haber caducado. Si lo abriste en otro ' +
+  'navegador o dispositivo, la cuenta ya está confirmada: entra con tu email y contraseña.';
 const codigoCaducado = new AuthApiError(
   'invalid flow state, no valid flow state found',
   404,

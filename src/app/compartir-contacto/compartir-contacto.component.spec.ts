@@ -147,6 +147,19 @@ describe('CompartirContactoComponent', () => {
       expect(navegar).not.toHaveBeenCalled();
     });
 
+    it('el selector de rol y «Revocar» de cada fila dicen, a quien usa un lector de pantalla, de qué persona son', async () => {
+      await abrir(propio);
+
+      expect(filas().map((_, indice) => selectorDe(indice).getAttribute('aria-label'))).toEqual([
+        'Rol de b@x.es',
+        'Rol de c@x.es',
+      ]);
+      expect(filas().map((_, indice) => revocar(indice).getAttribute('aria-label'))).toEqual([
+        'Revocar a b@x.es',
+        'Revocar a c@x.es',
+      ]);
+    });
+
     it('pinta de qué contacto se trata, el formulario con el rol «lector» elegido y el enlace «Volver» a /mis-contactos', async () => {
       await abrir(propio);
 

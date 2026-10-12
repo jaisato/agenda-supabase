@@ -1,5 +1,7 @@
 <div class="row">
   <div class="offset-by-three six columns">
+    <!-- Cada maxlength es el del check de su columna en la base de datos: sin él, un texto más
+         largo llegaría hasta Postgres y volvería como un error 23514 -->
     <form #formContacto="ngForm" (ngSubmit)="notificarGuardado(formContacto)" novalidate>
       <div>
         <label for="nombre">Nombre</label>
@@ -12,6 +14,7 @@
           #fieldNombre="ngModel"
           placeholder="Ej. Tim"
           required
+          maxlength="100"
         />
         @if (fieldNombre.touched && fieldNombre.invalid) {
           <div class="msg-error">El nombre es un campo obligatorio</div>
@@ -29,6 +32,7 @@
           placeholder="Ej. Cook"
           [ngModel]="inicial()?.apellidos ?? ''"
           required
+          maxlength="100"
         />
         @if (fieldApellidos.touched && fieldApellidos.invalid) {
           <div class="msg-error">El campo apellidos es obligatorio</div>
@@ -45,6 +49,7 @@
           placeholder="Ej. tim.cook@apple.com"
           [ngModel]="inicial()?.email ?? ''"
           required
+          maxlength="254"
         />
       </div>
 
@@ -58,6 +63,7 @@
           placeholder="Ej. 555-123456"
           [ngModel]="inicial()?.telefono ?? ''"
           required
+          maxlength="30"
         />
       </div>
 
@@ -71,6 +77,7 @@
           placeholder="Ej. tim.cook"
           [ngModel]="inicial()?.facebook ?? ''"
           required
+          maxlength="100"
         />
       </div>
 
@@ -84,11 +91,16 @@
           placeholder="Ej. @timcook"
           [ngModel]="inicial()?.twitter ?? ''"
           required
+          maxlength="100"
         />
       </div>
 
       <div>
-        <button type="submit" class="button-primary u-full-width" [disabled]="formContacto.invalid">
+        <button
+          type="submit"
+          class="button-primary u-full-width"
+          [disabled]="formContacto.invalid || enviando()"
+        >
           {{ textoBoton() }}
         </button>
       </div>

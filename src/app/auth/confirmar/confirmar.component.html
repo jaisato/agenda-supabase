@@ -2,7 +2,12 @@
   <div class="offset-by-three six columns">
     <h4>Confirmar cuenta</h4>
     @if (fallido()) {
-      <p>No hemos podido confirmar la cuenta. El enlace puede haber caducado.</p>
+      <!-- Abierto en otro navegador, GoTrue ya ha confirmado la cuenta al abrir el enlace, pero el
+           canje PKCE falla porque el code_verifier está en el navegador del registro -->
+      <p>
+        No hemos podido confirmar la cuenta. El enlace puede haber caducado. Si lo abriste en otro
+        navegador o dispositivo, la cuenta ya está confirmada: entra con tu email y contraseña.
+      </p>
       <a class="button button-primary" routerLink="/entrar">Entrar</a>
     } @else {
       <p>Confirmando tu cuenta…</p>

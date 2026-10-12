@@ -3,7 +3,8 @@ import { Router, provideRouter } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 import { MockInstance } from 'vitest';
 
-import { DatosContacto } from '../contacto';
+import { Contacto, DatosContacto } from '../contacto';
+import { ContactosService } from '../contactos.service';
 import { MensajesService } from '../mensajes.service';
 import { SUPABASE } from '../supabase/supabase.client';
 import { contactoDePrueba } from '../testing/contactos-de-prueba';
@@ -31,6 +32,9 @@ describe('NuevoContactoComponent', () => {
   let elemento: HTMLElement;
   let mensajes: MensajesService;
   let navegar: MockInstance<Router['navigate']>;
+  const formulario = () => elemento.querySelector<HTMLFormElement>('formulario-contacto form')!;
+  const anadir = () =>
+    elemento.querySelector<HTMLButtonElement>('formulario-contacto button[type="submit"]')!;
   // Deja que terminen las promesas pendientes y el repintado que provocan.
   const reposar = async () => {
     await new Promise((resolver) => setTimeout(resolver));
@@ -44,7 +48,7 @@ describe('NuevoContactoComponent', () => {
       campo.dispatchEvent(new Event('input'));
     }
     await fixture.whenStable();
-    elemento.querySelector<HTMLButtonElement>('formulario-contacto button[type="submit"]')!.click();
+    anadir().click();
     await reposar();
   };
 
@@ -94,6 +98,7 @@ describe('NuevoContactoComponent', () => {
     expect(
       elemento.querySelector<HTMLInputElement>('formulario-contacto input#nombre')!.value,
     ).toBe('Tim');
+    expect(anadir().disabled).toBe(false);
   });
 
   it('al reintentar quita el aviso del intento anterior', async () => {
@@ -106,5 +111,36 @@ describe('NuevoContactoComponent', () => {
 
     expect(mensajes.mensaje()).toBeNull();
     expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+  });
+
+  it('mientras espera la respuesta no deja enviar otra vez: una doble pulsación no crea dos contactos', async () => {
+    let terminarAlta!: (contacto: Contacto) => void;
+    const agregar = vi
+      .spyOn(TestBed.inject(ContactosService), 'agregarContacto')
+      .mockReturnValue(new Promise<Contacto>((resolver) => (terminarAlta = resolver)));
+
+    await enviar(tim);
+    expect(anadir().disabled).toBe(true);
+    // Intro dentro de un campo: envía el formulario sin pasar por el botón deshabilitado.
+    formulario().dispatchEvent(new Event('submit'));
+    await reposar();
+    expect(agregar).toHaveBeenCalledOnce();
+
+    terminarAlta(contactoDePrueba(tim));
+    await reposar();
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+  });
+
+  it('con el contacto ya creado, tampoco deja enviar otra vez mientras navega a /mis-contactos', async () => {
+    falso.respuestaDe('contactos', { data: contactoDePrueba(tim), error: null });
+    // La navegación espera al resolver de /mis-contactos, que vuelve a pedir los contactos.
+    navegar.mockReturnValue(new Promise(() => {}));
+
+    await enviar(tim);
+    formulario().dispatchEvent(new Event('submit'));
+    await reposar();
+
+    expect(falso.consultas).toHaveLength(1);
+    expect(anadir().disabled).toBe(true);
   });
 });

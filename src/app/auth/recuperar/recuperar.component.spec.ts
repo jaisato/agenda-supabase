@@ -8,7 +8,8 @@ import { SupabaseFalso, crearSupabaseFalso } from '../../testing/supabase-falso'
 import { RecuperarComponent } from './recuperar.component';
 
 const enlaceEnviado =
-  'Si existe una cuenta con ese email, recibirás un enlace para cambiar la contraseña.';
+  'Si existe una cuenta con ese email, recibirás un enlace para cambiar la contraseña. ' +
+  'Ábrelo en este mismo navegador.';
 
 describe('RecuperarComponent', () => {
   let falso: SupabaseFalso;

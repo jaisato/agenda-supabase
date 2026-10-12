@@ -35,7 +35,7 @@ export class MisContactosComponent {
   protected readonly seleccionado = signal<ContactoVisible | null>(null);
 
   async eliminarContacto(contacto: ContactoVisible): Promise<void> {
-    if (!confirm(`¿Estas seguro de eliminar a ${contacto.nombre}?`)) {
+    if (!confirm(`¿Estás seguro de eliminar a ${contacto.nombre}?`)) {
       return;
     }
     // Fuera el aviso del intento anterior.

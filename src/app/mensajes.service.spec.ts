@@ -52,6 +52,16 @@ describe('MensajesService', () => {
       ).toBe('No tienes permiso para hacer eso');
     });
 
+    it('23514 (un check de longitud) se traduce, sin mostrar el texto técnico de la base de datos', () => {
+      expect(
+        service.deError({
+          code: '23514',
+          message:
+            'new row for relation "contactos" violates check constraint "contactos_nombre_check"',
+        }),
+      ).toBe('Algún campo es demasiado largo');
+    });
+
     it('PT404 (no hay usuario con ese email) devuelve el texto de la RPC', () => {
       expect(
         service.deError({ code: 'PT404', message: 'No hay ningún usuario con ese email' }),

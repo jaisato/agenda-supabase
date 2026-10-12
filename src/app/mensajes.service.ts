@@ -43,6 +43,10 @@ export class MensajesService {
     switch (error.code) {
       case '42501':
         return 'No tienes permiso para hacer eso';
+      // Un check de las tablas: limitan la longitud de los textos (y que el nombre de un contacto
+      // no quede vacío, cosa que el formulario ya exige).
+      case '23514':
+        return 'Algún campo es demasiado largo';
       // Errores de la RPC compartir_contacto (PT404: no hay usuario con ese email; 22023:
       // compartir con uno mismo). Su mensaje ya está en español.
       case 'PT404':

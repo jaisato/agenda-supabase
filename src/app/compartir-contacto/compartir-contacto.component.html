@@ -73,7 +73,13 @@
                     </select>
                   </td>
                   <td>
-                    <button type="button" (click)="revocar(persona)">Revocar</button>
+                    <button
+                      type="button"
+                      [attr.aria-label]="'Revocar a ' + persona.email"
+                      (click)="revocar(persona)"
+                    >
+                      Revocar
+                    </button>
                   </td>
                 </tr>
               }

@@ -13,6 +13,8 @@ export class FormularioContactoComponent {
   // Valores de partida (al editar un contacto); sin ellos, el formulario empieza vacío.
   readonly inicial = input<DatosContacto | null>(null);
   readonly textoBoton = input('Añadir');
+  // Mientras quien usa el formulario espera la respuesta del guardado, el botón no se puede pulsar.
+  readonly enviando = input(false);
   readonly guardar = output<DatosContacto>();
 
   // '#formContacto="ngForm"' es un NgForm (formulario dirigido por plantilla), no un FormGroup.
