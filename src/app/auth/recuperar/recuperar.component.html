@@ -1,0 +1,39 @@
+<div class="row">
+  <div class="offset-by-three six columns">
+    <h4>Recuperar contraseña</h4>
+    @if (enviado()) {
+      <p>Si existe una cuenta con ese email, recibirás un enlace para cambiar la contraseña.</p>
+    } @else {
+      <form #form="ngForm" (ngSubmit)="enviarEnlace(form)" novalidate>
+        <div>
+          <label for="email">Email</label>
+          <input
+            class="u-full-width"
+            type="email"
+            id="email"
+            name="email"
+            autocomplete="email"
+            placeholder="Ej. tim.cook@apple.com"
+            ngModel
+            #fieldEmail="ngModel"
+            required
+            email
+          />
+          @if (fieldEmail.touched && fieldEmail.invalid) {
+            <div class="msg-error">Escribe un email válido</div>
+          }
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            class="button-primary u-full-width"
+            [disabled]="form.invalid || enviando()"
+          >
+            Enviar enlace
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</div>

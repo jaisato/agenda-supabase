@@ -1,5 +1,9 @@
-import { Component } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthError } from '@supabase/supabase-js';
+
+import { AuthService } from '../auth/auth.service';
+import { MensajesService } from '../mensajes.service';
 
 @Component({
   selector: 'barra-navegacion',
@@ -11,4 +15,17 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   // pestañas quedaban pegadas.
   preserveWhitespaces: true,
 })
-export class BarraNavegacionComponent {}
+export class BarraNavegacionComponent {
+  protected readonly auth = inject(AuthService);
+  private readonly mensajes = inject(MensajesService);
+  private readonly router = inject(Router);
+
+  async salir(): Promise<void> {
+    try {
+      await this.auth.salir();
+      await this.router.navigate(['/entrar']);
+    } catch (error) {
+      this.mensajes.error(this.mensajes.deError(error as AuthError));
+    }
+  }
+}

@@ -1,0 +1,58 @@
+<div class="row">
+  <div class="offset-by-three six columns">
+    <h4>Entrar</h4>
+    <form #form="ngForm" (ngSubmit)="entrar(form)" novalidate>
+      <div>
+        <label for="email">Email</label>
+        <input
+          class="u-full-width"
+          type="email"
+          id="email"
+          name="email"
+          autocomplete="username"
+          placeholder="Ej. tim.cook@apple.com"
+          ngModel
+          #fieldEmail="ngModel"
+          required
+          email
+        />
+        @if (fieldEmail.touched && fieldEmail.invalid) {
+          <div class="msg-error">Escribe un email válido</div>
+        }
+      </div>
+
+      <div>
+        <label for="password">Contraseña</label>
+        <input
+          class="u-full-width"
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="current-password"
+          ngModel
+          #fieldPassword="ngModel"
+          required
+        />
+        @if (fieldPassword.touched && fieldPassword.invalid) {
+          <div class="msg-error">Escribe la contraseña</div>
+        }
+      </div>
+
+      <div>
+        <button
+          type="submit"
+          class="button-primary u-full-width"
+          [disabled]="form.invalid || enviando()"
+        >
+          Entrar
+        </button>
+      </div>
+    </form>
+
+    <p class="enlaces">
+      <a routerLink="/registro">Crear cuenta</a>
+      |
+      <a routerLink="/auth/recuperar">¿Olvidaste la contraseña?</a>
+    </p>
+  </div>
+</div>

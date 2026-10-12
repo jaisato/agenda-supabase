@@ -1,0 +1,38 @@
+<div class="row">
+  <div class="offset-by-three six columns">
+    <h4>Cambiar contraseña</h4>
+    @if (enlaceInvalido()) {
+      <p>No hemos podido validar el enlace. Puede haber caducado.</p>
+      <a class="button button-primary" routerLink="/auth/recuperar">Pedir otro enlace</a>
+    } @else {
+      <form #form="ngForm" (ngSubmit)="guardar(form)" novalidate>
+        <div>
+          <label for="password">Nueva contraseña</label>
+          <input
+            class="u-full-width"
+            type="password"
+            id="password"
+            name="password"
+            autocomplete="new-password"
+            ngModel
+            #fieldPassword="ngModel"
+            required
+          />
+          @if (fieldPassword.touched && fieldPassword.invalid) {
+            <div class="msg-error">Escribe la contraseña nueva</div>
+          }
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            class="button-primary u-full-width"
+            [disabled]="form.invalid || ocupado()"
+          >
+            Guardar contraseña
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</div>
