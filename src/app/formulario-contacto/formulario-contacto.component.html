@@ -1,17 +1,20 @@
 <div class="row">
   <div class="offset-by-three six columns">
-    <form #formContacto="ngForm" (ngSubmit)="notificarCreacionContacto(formContacto)" novalidate>
+    <!-- Cada maxlength es el del check de su columna en la base de datos: sin él, un texto más
+         largo llegaría hasta Postgres y volvería como un error 23514 -->
+    <form #formContacto="ngForm" (ngSubmit)="notificarGuardado(formContacto)" novalidate>
       <div>
         <label for="nombre">Nombre</label>
         <input
           class="u-full-width"
           type="text"
           id="nombre"
-          ngModel
+          [ngModel]="inicial()?.nombre ?? ''"
           name="nombre"
           #fieldNombre="ngModel"
           placeholder="Ej. Tim"
           required
+          maxlength="100"
         />
         @if (fieldNombre.touched && fieldNombre.invalid) {
           <div class="msg-error">El nombre es un campo obligatorio</div>
@@ -27,8 +30,9 @@
           #fieldApellidos="ngModel"
           type="text"
           placeholder="Ej. Cook"
-          ngModel
+          [ngModel]="inicial()?.apellidos ?? ''"
           required
+          maxlength="100"
         />
         @if (fieldApellidos.touched && fieldApellidos.invalid) {
           <div class="msg-error">El campo apellidos es obligatorio</div>
@@ -43,8 +47,9 @@
           name="email"
           type="text"
           placeholder="Ej. tim.cook@apple.com"
-          ngModel
+          [ngModel]="inicial()?.email ?? ''"
           required
+          maxlength="254"
         />
       </div>
 
@@ -56,8 +61,9 @@
           name="telefono"
           type="text"
           placeholder="Ej. 555-123456"
-          ngModel
+          [ngModel]="inicial()?.telefono ?? ''"
           required
+          maxlength="30"
         />
       </div>
 
@@ -69,8 +75,9 @@
           name="facebook"
           type="text"
           placeholder="Ej. tim.cook"
-          ngModel
+          [ngModel]="inicial()?.facebook ?? ''"
           required
+          maxlength="100"
         />
       </div>
 
@@ -82,14 +89,19 @@
           name="twitter"
           type="text"
           placeholder="Ej. @timcook"
-          ngModel
+          [ngModel]="inicial()?.twitter ?? ''"
           required
+          maxlength="100"
         />
       </div>
 
       <div>
-        <button type="submit" class="button-primary u-full-width" [disabled]="formContacto.invalid">
-          Añadir
+        <button
+          type="submit"
+          class="button-primary u-full-width"
+          [disabled]="formContacto.invalid || enviando()"
+        >
+          {{ textoBoton() }}
         </button>
       </div>
     </form>

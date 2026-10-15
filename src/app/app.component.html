@@ -4,6 +4,15 @@
   </header>
   <!-- Barra de navegacion con Rutas -->
   <barra-navegacion></barra-navegacion>
+  <!-- Aviso de la aplicacion: errores y confirmaciones -->
+  @if (mensajes.mensaje(); as mensaje) {
+    <div class="mensaje mensaje-{{ mensaje.tipo }}" role="status">
+      {{ mensaje.texto }}
+      <button type="button" class="cerrar" aria-label="Cerrar aviso" (click)="mensajes.limpiar()">
+        ×
+      </button>
+    </div>
+  }
   <section>
     <!-- Zona Dinamica -->
     <router-outlet></router-outlet>

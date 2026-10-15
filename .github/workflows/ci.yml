@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    # Solo master: las ramas se prueban con el evento pull_request de su PR. Con los push de las
+    # ramas también, cada push a una rama con la PR abierta lanzaría el CI dos veces.
     branches: [master]
   pull_request:
 
@@ -35,3 +37,38 @@ jobs:
       - run: npx ng test --watch=false
 
       - run: npm audit --audit-level=low
+
+  # Prueba la base de datos de Supabase (supabase/) con el stack local en Docker. Corre en
+  # paralelo con build: no comparten nada.
+  base-de-datos:
+    name: Base de datos
+    runs-on: ubuntu-latest
+    # Arrancar el stack y probar tarda unos minutos. Sin límite, un arranque colgado ocuparía el
+    # runner hasta las 6 horas que GitHub da por defecto a un job.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Sin los servicios que la agenda no usa (Realtime, Storage, Edge Functions, logs ni
+      # Studio): arranca antes y gasta menos memoria.
+      - run: npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio
+
+      # Aplica las migraciones y supabase/seed.sql sobre una base limpia.
+      - run: npx supabase db reset
+
+      # pgTAP: supabase/tests/*.sql.
+      - run: npx supabase test db
+
+      - run: npx supabase db lint --local --fail-on warning
+
+      # database.types.ts es un fichero generado: si el esquema cambia y el fichero no, el diff falla.
+      - run: npx supabase gen types --local --lang typescript -s public > src/app/supabase/database.types.ts && git diff --exit-code -- src/app/supabase/database.types.ts

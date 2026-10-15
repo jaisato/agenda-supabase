@@ -1,17 +1,27 @@
 <div class="row">
-  <!-- lista de contactos -->
+  <!-- listas de contactos: los propios y los compartidos conmigo -->
   <div class="six columns">
+    <h4>Mis contactos</h4>
+    <lista-contactos [contactos]="propios()" (contactoSeleccionado)="verDetallesContacto($event)">
+    </lista-contactos>
+    <h4>Compartidos conmigo</h4>
     <lista-contactos
-      [contactos]="listaContactos()"
+      [contactos]="compartidos()"
       (contactoSeleccionado)="verDetallesContacto($event)"
     >
     </lista-contactos>
+    @if (compartidos().length === 0) {
+      <p>Nadie ha compartido contactos contigo todavía.</p>
+    }
   </div>
   <!-- Detalles del contacto seleccionado -->
   <div class="six columns">
     <detalles-contacto
-      [contacto]="contactoSeleccionado()"
+      [contacto]="seleccionado()"
       (eliminar)="eliminarContacto($event)"
+      (editar)="editar($event)"
+      (compartir)="compartir($event)"
+      (dejarDeVer)="dejarDeVer($event)"
       (navegarFacebook)="navegarRuta($event)"
       (navegarTwitter)="navegarRuta($event)"
     >

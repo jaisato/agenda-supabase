@@ -11,9 +11,13 @@
 </button>
 <ul>
   <!-- Con el bloque '@for' iteramos por una colección y replicamos el elemento HTML por cada item en la lista -->
-  @for (contacto of contactos() | SortContacts: sentidoOrdenacion(); track contacto) {
+  @for (contacto of contactos() | SortContacts: sentidoOrdenacion(); track contacto.id) {
     <li (click)="notificarContactoSeleccionado(contacto)">
       {{ contacto.nombre }} {{ contacto.apellidos }}
+      <!-- Rol con el que se ha compartido el contacto; los propios no llevan etiqueta -->
+      @if (contacto.rol !== 'propietario') {
+        <span class="rol">{{ contacto.rol }}</span>
+      }
       <!--
       <button (click)="notificarEliminacion(contacto)">Eliminar contacto</button>
       -->

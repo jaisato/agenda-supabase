@@ -16,3 +16,17 @@ a {
 .seleccionada {
   border-bottom: 1px solid white;
 }
+
+/* Email y «Salir» a la derecha; el margen negativo apoya el botón en la línea de la barra. */
+.sesion {
+  float: right;
+  margin-top: -3px;
+}
+
+.email {
+  margin-right: 10px;
+}
+
+.sesion button {
+  margin-bottom: 0;
+}

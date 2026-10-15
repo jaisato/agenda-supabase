@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+# Publishable key de Supabase (sb_publishable_...): viaja en el JS del navegador (src/environments,
+# keep-alive.yml) y quien protege los datos es la RLS, no la clave. [[allowlists]] (varias listas
+# globales) exige gitleaks >= 8.25; antes solo existía [allowlist].
+[[allowlists]]
+description = "Publishable key de Supabase: pública por diseño (se envía al navegador; la protección es RLS)"
+regexes = ['''^sb_publishable_[A-Za-z0-9_-]+$''']

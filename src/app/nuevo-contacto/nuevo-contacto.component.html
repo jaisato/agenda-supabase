@@ -1,2 +1,3 @@
 <!-- Formulario de alta -->
-<formulario-contacto (nuevoContacto)="agregarContacto($event)"> </formulario-contacto>
+<formulario-contacto [enviando]="enviando()" (guardar)="agregarContacto($event)">
+</formulario-contacto>

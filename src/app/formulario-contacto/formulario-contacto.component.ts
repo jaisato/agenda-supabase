@@ -1,7 +1,7 @@
-import { Component, output } from '@angular/core';
-
+import { Component, input, output } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-import { Contacto } from '../contacto';
+
+import { DatosContacto } from '../contacto';
 
 @Component({
   selector: 'formulario-contacto',
@@ -10,11 +10,17 @@ import { Contacto } from '../contacto';
   styleUrl: './formulario-contacto.component.css',
 })
 export class FormularioContactoComponent {
-  readonly nuevoContacto = output<Contacto>();
+  // Valores de partida (al editar un contacto); sin ellos, el formulario empieza vacío.
+  readonly inicial = input<DatosContacto | null>(null);
+  readonly textoBoton = input('Añadir');
+  // Mientras quien usa el formulario espera la respuesta del guardado, el botón no se puede pulsar.
+  readonly enviando = input(false);
+  readonly guardar = output<DatosContacto>();
 
   // '#formContacto="ngForm"' es un NgForm (formulario dirigido por plantilla), no un FormGroup.
-  notificarCreacionContacto(form: NgForm) {
-    // emitir el evento de crear contacto
-    this.nuevoContacto.emit(form.value as Contacto);
+  notificarGuardado(form: NgForm) {
+    // form.value solo tiene los seis campos con name, aunque `inicial` traiga más (un contacto
+    // entero): es justo lo que la base de datos deja insertar o actualizar.
+    this.guardar.emit(form.value as DatosContacto);
   }
 }

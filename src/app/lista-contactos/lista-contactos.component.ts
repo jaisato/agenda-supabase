@@ -1,6 +1,6 @@
 import { Component, input, output, signal } from '@angular/core';
 
-import { Contacto } from '../contacto';
+import { ContactoVisible } from '../contacto';
 import { SortContactsPipe } from '../sort-contacts.pipe';
 
 @Component({
@@ -11,10 +11,10 @@ import { SortContactsPipe } from '../sort-contacts.pipe';
 })
 export class ListaContactosComponent {
   // Usamos la función 'input' para enlazar datos de entrada.
-  readonly contactos = input<Contacto[]>([]);
+  readonly contactos = input<ContactoVisible[]>([]);
 
-  readonly contactoSeleccionado = output<Contacto>();
-  notificarContactoSeleccionado(contacto: Contacto): void {
+  readonly contactoSeleccionado = output<ContactoVisible>();
+  notificarContactoSeleccionado(contacto: ContactoVisible): void {
     this.contactoSeleccionado.emit(contacto);
   }
 
