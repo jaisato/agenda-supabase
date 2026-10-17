@@ -22,6 +22,7 @@ proyecto de Supabase con GitHub Actions.
 - [Decisiones y límites](#decisiones-y-límites)
 - [Estructura del repositorio](#estructura-del-repositorio)
 - [Créditos](#créditos)
+- [Licencia](#licencia)
 
 ## Qué es y qué demuestra
 
@@ -558,3 +559,9 @@ Startup de KeepCoding (2016): una lista de contactos ordenable, con detalle y en
 Twitter, alta con formulario validado y baja con confirmación, sobre Angular 2 y json-server. Este
 repositorio conserva su historial; la versión actual la lleva a Angular 22 y la convierte en una
 aplicación multiusuario sobre Supabase.
+
+## Licencia
+
+Este repositorio se publica bajo la licencia MIT: puedes usarlo, copiarlo y modificarlo, también con
+fines comerciales, siempre que conserves el aviso de copyright y la licencia. El texto completo está en
+[LICENSE](LICENSE).
