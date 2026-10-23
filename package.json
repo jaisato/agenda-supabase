@@ -37,7 +37,7 @@
     "prettier": "^3.9.10",
     "supabase": "2.121.0",
     "typescript": "~6.0.2",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.5"
   },
   "keywords": [],
   "author": "Jairo ST",
