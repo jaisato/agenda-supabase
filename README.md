@@ -550,7 +550,7 @@ español y sin tildes.
 ### Versiones y dependencias
 
 - Angular 22 (CLI con el builder `@angular/build`), TypeScript 6.0 y Vitest 5 con jsdom.
-- `@supabase/supabase-js` 2.117.3 y la CLI `supabase` 2.120.0, con versiones exactas.
+- `@supabase/supabase-js` 2.118.0 y la CLI `supabase` 2.122.0, con versiones exactas.
 - Dependabot propone cada semana las actualizaciones de npm (todo `@angular/*` en una sola PR, y
   `@supabase/*` con la CLI `supabase` en otra) y cada mes las de las acciones de GitHub. Las
   versiones mayores de Angular se hacen con `ng update`, que también aplica las migraciones de
