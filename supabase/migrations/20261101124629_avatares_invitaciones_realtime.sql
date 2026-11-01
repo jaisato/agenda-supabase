@@ -73,8 +73,10 @@ create trigger guardar_avatar before update on public.perfiles
 -- las invitaciones a ese email. Con un proveedor OAuth o el admin API el usuario nace confirmado y
 -- el canje va en el propio insert; con el registro por email, en la confirmación. Una invitación
 -- al propio contacto (el email nuevo es el del dueño) se tira: no se convierte en una compartición
--- consigo mismo. El conflicto solo cambia el rol, igual que volver a compartir con alguien que ya
--- aceptó.
+-- consigo mismo. Si al canjear ya existe una compartición para ese contacto y esa persona (la creó
+-- la RPC mientras el email seguía sin confirmar, o un cambio de email junta dos identidades), se
+-- respeta tal cual (do nothing): ahí está la última decisión del dueño, y la invitación solo se
+-- borra. Sin esto, la confirmación devolvía el rol antiguo de la invitación.
 
 create or replace function privado.crear_perfil() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -93,7 +95,7 @@ begin
   join public.contactos c on c.id = i.contacto_id
   where i.email = lower(new.email)
     and c.propietario_id is distinct from new.id
-  on conflict (contacto_id, usuario_id) do update set rol = excluded.rol;
+  on conflict (contacto_id, usuario_id) do nothing;
 
   delete from public.invitaciones_contacto where email = lower(new.email);
   return new;
@@ -112,6 +114,11 @@ create or replace trigger crear_perfil
 -- que todavía no existe (sin_cuenta verdadero, usuario_id null, estado pendiente). Quien invita
 -- distingue las dos: es la misma decisión que el antiguo PT404, ahora visible en la lista y no
 -- en un error. PT404 ya no sale de esta función; el cliente lo sigue traduciendo por si acaso.
+--
+-- Con perfil manda la compartición, aunque el email siga sin confirmar (la persona la verá al
+-- confirmar y entrar). En ese caso se borra la invitación por email que hubiera para el mismo
+-- contacto: así el canje de la confirmación no deshace después lo que el dueño acaba de decidir
+-- (rebajar el rol, o revocar) y la pantalla de compartir no enseña dos filas para la misma persona.
 
 create type public.resultado_compartir as (
   usuario_id uuid,
@@ -162,6 +169,10 @@ begin
   values (p_contacto_id, v_usuario, p_rol, 'pendiente')
   on conflict (contacto_id, usuario_id) do update set rol = excluded.rol
   returning contactos_compartidos.rol, contactos_compartidos.estado into v_rol, v_estado;
+  -- La invitación por email de este contacto, si quedaba (de antes del registro, o huérfana de una
+  -- carrera con la confirmación), sobra: la compartición ya recoge la última decisión del dueño.
+  delete from public.invitaciones_contacto
+  where contacto_id = p_contacto_id and email = v_email;
   return (v_usuario, v_rol, v_estado, v_email, false)::public.resultado_compartir;
 end $$;
 

@@ -16,7 +16,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(76);
+select plan(88);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -354,6 +354,72 @@ select throws_ok(
   $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, 'a@', 'lector')$$,
   '22023', 'Escribe un email válido',
   'un email de dos caracteres lo rechaza la RPC, no el check de la tabla');
+
+-- Volver a compartir cuando el perfil ya existe pero el email sigue sin confirmar: manda la
+-- compartición y la invitación por email de ese contacto desaparece. Así la confirmación no vuelve
+-- a poner el rol antiguo de la invitación, y la pantalla de compartir no enseña dos filas para la
+-- misma persona.
+select pruebas.autenticar('futuro@test.local');
+select lives_ok(
+  $$select public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'luego@test.local', 'editor')$$,
+  'A invita como editor a un email sin cuenta');
+reset role;
+select lives_ok($$select pruebas.crear_usuario('luego@test.local', false)$$,
+  'ese email se registra sin confirmar');
+select pruebas.autenticar('futuro@test.local');
+select results_eq(
+  $$select rol::text, estado::text, sin_cuenta from public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'luego@test.local', 'lector')$$,
+  $$values ('lector', 'pendiente', false)$$,
+  'A rebaja a lector: con el perfil ya creado, la RPC crea la compartición pendiente');
+select is_empty($$select * from public.invitaciones_contacto where email = 'luego@test.local'$$,
+  'y borra la invitación por email de ese contacto');
+reset role;
+select lives_ok(
+  $$update auth.users set email_confirmed_at = now()
+    where id = pruebas.id_usuario('luego@test.local')$$,
+  'GoTrue confirma el email de luego@test.local');
+select results_eq(
+  $$select rol::text, estado::text from public.contactos_compartidos
+    where usuario_id = pruebas.id_usuario('luego@test.local')$$,
+  $$values ('lector', 'pendiente')$$,
+  'la confirmación respeta el último rol del dueño: sigue siendo lector');
+
+-- Si al canjear ya existe la compartición (una invitación huérfana de una carrera con la
+-- confirmación, o un cambio de email que junta dos identidades), el canje no la toca: solo borra la
+-- invitación. Las dos filas las pone postgres a mano, que es la única forma de llegar a ese estado.
+select lives_ok($$select pruebas.crear_usuario('doble@test.local', false)$$,
+  'se registra doble@test.local sin confirmar');
+insert into public.invitaciones_contacto (contacto_id, email, rol)
+values (current_setting('prueba.c1')::uuid, 'doble@test.local', 'editor');
+insert into public.contactos_compartidos (contacto_id, usuario_id, rol, estado)
+values (current_setting('prueba.c1')::uuid, pruebas.id_usuario('doble@test.local'), 'lector',
+        'aceptada');
+select lives_ok(
+  $$update auth.users set email_confirmed_at = now()
+    where id = pruebas.id_usuario('doble@test.local')$$,
+  'se confirma el email con una compartición ya existente');
+select results_eq(
+  $$select rol::text, estado::text from public.contactos_compartidos
+    where usuario_id = pruebas.id_usuario('doble@test.local')$$,
+  $$values ('lector', 'aceptada')$$,
+  'el canje no sobrescribe la compartición existente');
+select is_empty($$select * from public.invitaciones_contacto where email = 'doble@test.local'$$,
+  'pero sí borra la invitación');
+
+-- El camino inverso: compartir con un perfil confirmado tampoco deja una invitación huérfana para
+-- ese contacto (la pone postgres, como quedaría tras una carrera con la confirmación).
+insert into public.invitaciones_contacto (contacto_id, email, rol)
+values (current_setting('prueba.c1')::uuid, 'c@test.local', 'editor');
+select pruebas.autenticar('futuro@test.local');
+select results_eq(
+  $$select rol::text, sin_cuenta from public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'c@test.local', 'lector')$$,
+  $$values ('lector', false)$$,
+  'A comparte con C, que ya tiene la cuenta confirmada');
+select is_empty($$select * from public.invitaciones_contacto where email = 'c@test.local'$$,
+  'la invitación huérfana a ese email desaparece');
 
 -- Un visitante sin sesión no puede ejecutar la RPC ni listar invitaciones. También daría 42501 si
 -- la función llegara a ejecutarse, así que se comprueba el mensaje: es el del privilegio de
