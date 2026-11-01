@@ -57,14 +57,18 @@ export class CompartirContactoComponent implements OnInit {
     this._mensajes.limpiar();
     this.enviando.set(true);
     try {
-      await this._contactosService.compartir(this.propio()!.id, email, rol);
+      const comparticion = await this._contactosService.compartir(this.propio()!.id, email, rol);
+      const texto =
+        comparticion.estado === 'pendiente'
+          ? `Invitación enviada a ${email} como ${rol}`
+          : `${email} ahora es ${rol}`;
+      this._mensajes.exito(texto);
     } catch (error) {
       this.avisarDe(error);
       return;
     } finally {
       this.enviando.set(false);
     }
-    this._mensajes.exito(`Compartido con ${email} como ${rol}`);
     // Listo para compartir con otra persona: sin email y con el mismo rol.
     form.resetForm({ email: '', rol });
     await this.cargar();

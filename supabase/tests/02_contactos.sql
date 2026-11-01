@@ -77,8 +77,8 @@ select isnt(
 
 -- A comparte Timothy con B como lector: B lo ve pero no lo edita.
 reset role;
-insert into public.contactos_compartidos (contacto_id, usuario_id, rol)
-select id, pruebas.id_usuario('b@test.local'), 'lector'
+insert into public.contactos_compartidos (contacto_id, usuario_id, rol, estado)
+select id, pruebas.id_usuario('b@test.local'), 'lector', 'aceptada'
 from public.contactos
 where nombre = 'Timothy' and propietario_id = pruebas.id_usuario('a@test.local');
 select pruebas.autenticar('b@test.local');

@@ -16,18 +16,29 @@ const propio = contactoVisibleDePrueba('propietario', { id: 'c1' });
 const deOtro = (rol: 'lector' | 'editor') =>
   contactoVisibleDePrueba(rol, { id: 'c1', propietario_id: 'u2' });
 // Lo que devuelve PostgREST: cada compartición con el perfil embebido.
-const fila = (usuario_id: string, rol: Rol, email: string) => ({
+const fila = (
+  usuario_id: string,
+  rol: Rol,
+  email: string,
+  estado: 'pendiente' | 'aceptada' = 'aceptada',
+) => ({
   usuario_id,
   rol,
+  estado,
   perfiles: { email },
 });
-const filaB = fila('u2', 'lector', 'b@x.es');
+const filaB = fila('u2', 'lector', 'b@x.es', 'pendiente');
 const filaC = fila('u3', 'editor', 'c@x.es');
 // La fila de contactos_compartidos que devuelve la RPC compartir_contacto.
-const compartidoCon = (usuario_id: string, rol: Rol) => ({
+const compartidoCon = (
+  usuario_id: string,
+  rol: Rol,
+  estado: 'pendiente' | 'aceptada' = 'pendiente',
+) => ({
   contacto_id: 'c1',
   usuario_id,
   rol,
+  estado,
   creado_en: '2026-10-01T10:00:00+00:00',
 });
 
@@ -75,6 +86,7 @@ describe('CompartirContactoComponent', () => {
   const selectorDe = (indice: number) =>
     filas()[indice].querySelector<HTMLSelectElement>('select')!;
   const roles = () => filas().map((_, indice) => selectorDe(indice).value);
+  const estados = () => filas().map((f) => f.querySelectorAll('td')[2]?.textContent?.trim());
   const revocar = (indice: number) => filas()[indice].querySelector<HTMLButtonElement>('button')!;
   const consultasDeLaTabla = () =>
     falso.consultas.filter((consulta) => consulta.tabla === 'contactos_compartidos');
@@ -132,13 +144,14 @@ describe('CompartirContactoComponent', () => {
         {
           tabla: 'contactos_compartidos',
           cadena: [
-            { metodo: 'select', args: ['usuario_id, rol, perfiles(email)'] },
+            { metodo: 'select', args: ['usuario_id, rol, estado, perfiles(email)'] },
             { metodo: 'eq', args: ['contacto_id', 'c1'] },
           ],
         },
       ]);
       expect(emails()).toEqual(['b@x.es', 'c@x.es']);
       expect(roles()).toEqual(['lector', 'editor']);
+      expect(estados()).toEqual(['pendiente', 'aceptada']);
       expect(filas().map((f) => f.querySelector('button')?.textContent?.trim())).toEqual([
         'Revocar',
         'Revocar',
@@ -206,7 +219,7 @@ describe('CompartirContactoComponent', () => {
       expect(elemento.textContent).not.toContain('Este contacto no está compartido con nadie.');
       expect(filas()).toEqual([]);
 
-      terminarCarga([{ usuario_id: 'u2', rol: 'lector', email: 'b@x.es' }]);
+      terminarCarga([{ usuario_id: 'u2', rol: 'lector', email: 'b@x.es', estado: 'pendiente' }]);
       await reposar();
 
       expect(emails()).toEqual(['b@x.es']);
@@ -263,13 +276,26 @@ describe('CompartirContactoComponent', () => {
         });
         expect(mensajes.mensaje()).toEqual({
           tipo: 'exito',
-          texto: 'Compartido con b@x.es como editor',
+          texto: 'Invitación enviada a b@x.es como editor',
         });
         // La lista se vuelve a pedir y se repinta con la persona nueva.
         expect(consultasDeLaTabla()).toHaveLength(2);
         expect(emails()).toEqual(['b@x.es']);
         expect(roles()).toEqual(['editor']);
         expect(navegar).not.toHaveBeenCalled();
+      });
+
+      it('si esa persona ya había aceptado, el aviso dice el rol nuevo', async () => {
+        falso.respuestaRpc('compartir_contacto', {
+          data: compartidoCon('u2', 'editor', 'aceptada'),
+          error: null,
+        });
+        await abrir(propio);
+        await escribir('b@x.es', 'editor');
+
+        await enviar();
+
+        expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'b@x.es ahora es editor' });
       });
 
       it('tras compartir deja el formulario listo para otra persona: sin email y con el rol que se había elegido', async () => {
@@ -324,12 +350,17 @@ describe('CompartirContactoComponent', () => {
 
         await enviar();
         expect(mensajes.mensaje()).toBeNull();
-        terminarComparticion({ usuario_id: 'u2', rol: 'lector', email: 'b@x.es' });
+        terminarComparticion({
+          usuario_id: 'u2',
+          rol: 'lector',
+          email: 'b@x.es',
+          estado: 'pendiente',
+        });
         await reposar();
 
         expect(mensajes.mensaje()).toEqual({
           tipo: 'exito',
-          texto: 'Compartido con b@x.es como lector',
+          texto: 'Invitación enviada a b@x.es como lector',
         });
       });
 

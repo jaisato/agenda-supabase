@@ -1,6 +1,32 @@
 <div class="row">
   <!-- listas de contactos: los propios y los compartidos conmigo -->
   <div class="six columns">
+    @if (invitaciones().length > 0) {
+      <h4>Invitaciones</h4>
+      <ul>
+        @for (invitacion of invitaciones(); track invitacion.contacto_id) {
+          <li>
+            {{ invitacion.nombre }}
+            <span class="rol">{{ invitacion.rol }}</span>
+            de {{ quienInvita(invitacion) }}
+            <button
+              type="button"
+              [attr.aria-label]="'Aceptar la invitación a ' + invitacion.nombre"
+              (click)="aceptar(invitacion)"
+            >
+              Aceptar
+            </button>
+            <button
+              type="button"
+              [attr.aria-label]="'Rechazar la invitación a ' + invitacion.nombre"
+              (click)="rechazar(invitacion)"
+            >
+              Rechazar
+            </button>
+          </li>
+        }
+      </ul>
+    }
     <label for="buscar">Buscar</label>
     <input
       id="buscar"
@@ -29,7 +55,9 @@
       (contactoSeleccionado)="verDetallesContacto($event)"
     >
     </lista-contactos>
-    @if (compartidos().length === 0) {
+    @if (compartidos().length === 0 && invitaciones().length > 0) {
+      <p>Cuando aceptes una invitación, el contacto aparecerá aquí.</p>
+    } @else if (compartidos().length === 0) {
       <p>Nadie ha compartido contactos contigo todavía.</p>
     } @else if (compartidosVisibles().length === 0) {
       <p>Ningún contacto compartido coincide con la búsqueda.</p>

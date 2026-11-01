@@ -191,7 +191,7 @@ describe('rutas de la aplicación', () => {
         {
           tabla: 'contactos_compartidos',
           cadena: [
-            { metodo: 'select', args: ['usuario_id, rol, perfiles(email)'] },
+            { metodo: 'select', args: ['usuario_id, rol, estado, perfiles(email)'] },
             { metodo: 'eq', args: ['contacto_id', 'c3'] },
           ],
         },
