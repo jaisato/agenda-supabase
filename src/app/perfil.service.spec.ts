@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Session } from '@supabase/supabase-js';
 
 import { AuthService } from './auth/auth.service';
+import { AvatarService } from './avatar.service';
 import { PerfilService } from './perfil.service';
 import { SUPABASE } from './supabase/supabase.client';
 import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
@@ -50,6 +51,33 @@ describe('PerfilService', () => {
       nombre: 'Ana Ruiz',
     });
     expect(service.perfil()?.nombre).toBe('Ana Ruiz');
+  });
+
+  it('con avatar firma su URL y la vuelve a pedir cuando AvatarService avisa de la caducidad', async () => {
+    const reposar = async () => {
+      await TestBed.flushEffects();
+      await new Promise((resolver) => setTimeout(resolver));
+      await TestBed.flushEffects();
+    };
+    falso.respuestaDe('perfiles', {
+      data: { ...fila, avatar_ruta: 'u1/avatar.png' },
+      error: null,
+    });
+
+    await service.cargar();
+    await reposar();
+
+    expect(service.urlAvatar()).toBe('https://firmada.local/u1/avatar.png');
+    expect(falso.storage.createSignedUrl).toHaveBeenCalledTimes(1);
+
+    // Lo que hace el temporizador de AvatarService cuando quedan menos de cinco minutos.
+    const avatares = TestBed.inject(AvatarService);
+    avatares.olvidar('u1/avatar.png');
+    avatares.renovacion.update((valor) => valor + 1);
+    await reposar();
+
+    expect(falso.storage.createSignedUrl).toHaveBeenCalledTimes(2);
+    expect(service.urlAvatar()).toBe('https://firmada.local/u1/avatar.png');
   });
 
   it('al cerrar la sesión olvida el perfil', async () => {

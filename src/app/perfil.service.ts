@@ -55,6 +55,8 @@ export class PerfilService {
     });
 
     effect((onCleanup) => {
+      // Cuando una firma está a punto de caducar, AvatarService avisa y la URL se vuelve a pedir.
+      this.avatares.renovacion();
       const ruta = this.perfil()?.avatar_ruta ?? null;
       if (!ruta) {
         this.urlAvatar.set(null);

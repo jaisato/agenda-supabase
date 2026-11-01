@@ -19,6 +19,8 @@ export class DetallesContactoComponent {
 
   constructor() {
     effect((onCleanup) => {
+      // Cuando una firma está a punto de caducar, AvatarService avisa y la URL se vuelve a pedir.
+      this.avatares.renovacion();
       const ruta = this.contacto()?.propietario.avatar_ruta ?? null;
       if (!ruta) {
         this.urlPropietario.set(null);
