@@ -1,7 +1,15 @@
 import { Injectable, inject } from '@angular/core';
+import { PostgrestError } from '@supabase/supabase-js';
 
 import { AuthService } from './auth/auth.service';
-import { Comparticion, Contacto, ContactoVisible, DatosContacto, Rol } from './contacto';
+import {
+  Comparticion,
+  Contacto,
+  ContactoVisible,
+  DatosContacto,
+  InvitacionPendiente,
+  Rol,
+} from './contacto';
 import { SUPABASE } from './supabase/supabase.client';
 
 // Un contacto con las comparticiones embebidas. La RLS decide qué comparticiones llegan: el
@@ -81,9 +89,9 @@ export class ContactosService {
 
   /**
    * Comparte el contacto con la persona de ese email. Solo el propietario puede; la RPC normaliza
-   * el email y, si ya estaba compartido con esa persona, le cambia el rol. Lanza el error de la
-   * RPC: `42501` (no es el propietario), `PT404` (no hay nadie con ese email) o `22023` (compartir
-   * con uno mismo).
+   * el email y, si ya estaba compartido con esa persona, le cambia el rol sin tocar el estado. Una
+   * fila nueva queda `pendiente`. Lanza el error de la RPC: `42501` (no es el propietario),
+   * `PT404` (no hay nadie con ese email) o `22023` (compartir con uno mismo).
    */
   async compartir(contactoId: string, email: string, rol: Rol): Promise<Comparticion> {
     const { data, error } = await this.supabase.rpc('compartir_contacto', {
@@ -95,7 +103,46 @@ export class ContactosService {
       throw error;
     }
     // La RPC devuelve la fila de contactos_compartidos, que no lleva el email: es el que se pidió.
-    return { usuario_id: data.usuario_id, rol: data.rol, email };
+    return { usuario_id: data.usuario_id, rol: data.rol, email, estado: data.estado };
+  }
+
+  /** Invitaciones de la persona con la sesión. Solo el nombre del contacto, no sus datos. */
+  async invitaciones(): Promise<InvitacionPendiente[]> {
+    const { data, error } = await this.supabase.rpc('invitaciones_pendientes');
+    if (error) {
+      throw error;
+    }
+    return data ?? [];
+  }
+
+  /**
+   * Acepta una invitación propia. Si la fila ya no está pendiente, la RLS no la toca y aquí se
+   * lanza `42501`: PostgREST no distingue «cero filas» de un update filtrado.
+   */
+  async aceptar(contactoId: string): Promise<void> {
+    const usuarioId = this.auth.usuario()?.id;
+    if (!usuarioId) {
+      throw new PostgrestError({ message: 'No hay sesión', details: '', hint: '', code: '42501' });
+    }
+    const { data, error } = await this.supabase
+      .from('contactos_compartidos')
+      .update({ estado: 'aceptada' })
+      .eq('contacto_id', contactoId)
+      .eq('usuario_id', usuarioId)
+      .eq('estado', 'pendiente')
+      .select('contacto_id')
+      .maybeSingle();
+    if (error) {
+      throw error;
+    }
+    if (!data) {
+      throw new PostgrestError({
+        message: 'La invitación ya no está pendiente',
+        details: '',
+        hint: '',
+        code: '42501',
+      });
+    }
   }
 
   async cambiarRol(contactoId: string, usuarioId: string, rol: Rol): Promise<void> {
@@ -125,14 +172,15 @@ export class ContactosService {
   async listarComparticiones(contactoId: string): Promise<Comparticion[]> {
     const { data, error } = await this.supabase
       .from('contactos_compartidos')
-      .select('usuario_id, rol, perfiles(email)')
+      .select('usuario_id, rol, estado, perfiles(email)')
       .eq('contacto_id', contactoId);
     if (error) {
       throw error;
     }
-    return data.map(({ usuario_id, rol, perfiles }) => ({
+    return data.map(({ usuario_id, rol, estado, perfiles }) => ({
       usuario_id,
       rol,
+      estado,
       email: perfiles.email,
     }));
   }

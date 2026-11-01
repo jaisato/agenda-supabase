@@ -27,14 +27,14 @@ isOneToOne: false
                   ]
                 },"contactos_compartidos": {
                   Row: {
-                    "contacto_id": string,"creado_en": string,"rol": Database["public"]['Enums']["rol_comparticion"],"usuario_id": string
+                    "contacto_id": string,"creado_en": string,"estado": Database["public"]['Enums']["estado_comparticion"],"rol": Database["public"]['Enums']["rol_comparticion"],"usuario_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "contacto_id": string,"creado_en"?: string,"rol": Database["public"]['Enums']["rol_comparticion"],"usuario_id": string
+                    "contacto_id": string,"creado_en"?: string,"estado"?: Database["public"]['Enums']["estado_comparticion"],"rol": Database["public"]['Enums']["rol_comparticion"],"usuario_id": string
                   }
                   Update: {
-                    "contacto_id"?: string,"creado_en"?: string,"rol"?: Database["public"]['Enums']["rol_comparticion"],"usuario_id"?: string
+                    "contacto_id"?: string,"creado_en"?: string,"estado"?: Database["public"]['Enums']["estado_comparticion"],"rol"?: Database["public"]['Enums']["rol_comparticion"],"usuario_id"?: string
                   }
                   Relationships: [
                     {
@@ -75,6 +75,7 @@ isOneToOne: false
 { Args: { "p_contacto_id": string,"p_email": string,"p_rol": Database["public"]['Enums']["rol_comparticion"] }; Returns: {
               "contacto_id": string,
 "creado_en": string,
+"estado": Database["public"]['Enums']["estado_comparticion"],
 "rol": Database["public"]['Enums']["rol_comparticion"],
 "usuario_id": string
             }
@@ -83,10 +84,15 @@ isOneToOne: false
         to: "contactos_compartidos"
         isOneToOne: true
         isSetofReturn: false
-      } }
+      } },
+"invitaciones_pendientes":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "contacto_id": string,"nombre": string,"propietario_email": string,"propietario_nombre": string,"rol": Database["public"]['Enums']["rol_comparticion"]
+            }[]
+                           }
           }
           Enums: {
-            "rol_comparticion": "lector"|"editor"
+            "estado_comparticion": "pendiente"|"aceptada","rol_comparticion": "lector"|"editor"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -202,7 +208,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "rol_comparticion": ["lector", "editor"]
+            "estado_comparticion": ["pendiente", "aceptada"],"rol_comparticion": ["lector", "editor"]
           }
         }
 } as const

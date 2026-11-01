@@ -186,6 +186,8 @@ async function sembrar() {
           contacto_id,
           usuario_id: idDe(con),
           rol,
+          // Las filas sembradas ya están aceptadas: la demo no pide pulsar «Aceptar».
+          estado: 'aceptada',
         })),
         { onConflict: 'contacto_id,usuario_id' },
       )

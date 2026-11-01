@@ -93,8 +93,8 @@ diseño, con las alternativas descartadas, en
 - `perfiles`: una fila por usuario de `auth.users` (`email`, `nombre`, `creado_en`), que mantiene
   el trigger `privado.crear_perfil`.
 - `contactos`: los contactos. `propietario_id` es el dueño y por defecto vale `auth.uid()`.
-- `contactos_compartidos`: quién tiene acceso a qué contacto y con qué rol (`rol_comparticion`:
-  `lector` o `editor`).
+- `contactos_compartidos`: quién tiene acceso a qué contacto, con qué rol (`rol_comparticion`:
+  `lector` o `editor`) y en qué estado (`estado_comparticion`: `pendiente` o `aceptada`).
 - `privado.*`: funciones `SECURITY DEFINER` (para las políticas) y de trigger. El esquema no está
   expuesto en la Data API.
 - `public.compartir_contacto(p_contacto_id, p_email, p_rol)`: la RPC con la que se comparte un
@@ -111,10 +111,16 @@ diseño, con las alternativas descartadas, en
 | Compartirlo, cambiar un rol o revocar          | sí          | no     | no     |
 | Dejar de verlo (borrar su propia compartición) | —           | sí     | sí     |
 
+Esa tabla vale cuando la compartición está `aceptada`. La RPC la crea `pendiente`: el destinatario
+no ve el contacto ni puede editarlo hasta que acepta (`update` de `estado`). Rechazarla es borrar
+la fila, igual que dejar de ver. El propietario puede cambiar el rol o revocar mientras tanto, pero
+no puede aceptar por el otro. Volver a compartir cambia el rol y no devuelve a `pendiente` una fila
+ya aceptada. `anon` no ejecuta `invitaciones_pendientes()`, que devuelve solo el nombre del
+contacto y quién invita.
+
 ### Por qué RLS y privilegios por columna
 
-- **RLS decide qué filas.** Un contacto lo ve su propietario o quien tiene una compartición; lo
-  edita el propietario o un editor; lo borra solo el propietario. Todas las políticas son
+- **RLS decide qué filas.** Un contacto lo ve su propietario o quien tiene una compartición aceptada; lo edita el propietario o un editor; lo borra solo el propietario. Todas las políticas son
   `to authenticated` y usan `(select auth.uid())`, que Postgres evalúa una vez por consulta.
 - **Los privilegios por columna deciden qué columnas.** RLS sola no impide que un editor, que sí
   puede actualizar la fila, cambie `propietario_id` y se quede el contacto (o se lo regale a otro
@@ -153,7 +159,8 @@ están en `src/app/app.routes.ts`:
 - `/auth/confirmar` y `/auth/nueva-contrasena`: destino de los enlaces de los correos
   (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión.
 - `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con búsqueda, la etiqueta del rol y
-  el detalle del seleccionado; `?contacto=` conserva la selección), `/nuevo-contacto`,
+  el detalle del seleccionado; `?contacto=` conserva la selección; las invitaciones pendientes se
+  aceptan o se rechazan ahí, y al volver a la pestaña se vuelve a pedir la lista), `/nuevo-contacto`,
   `/contactos/:id/editar`, `/contactos/:id/compartir` y `/perfil` (nombre público y cambio de
   contraseña con la sesión abierta): llevan `authGuard`, que sin sesión redirige a `/entrar`.
 - Cualquier otra ruta redirige a `/mis-contactos`.
@@ -287,11 +294,14 @@ locales y nunca se despliegan.
 - `02_contactos.sql`: cada usuario ve y toca solo lo suyo (otro usuario no ve, edita ni borra sus
   contactos); insertar un contacto a nombre de otro falla con `42501`; semántica de lector y
   editor; borrar un contacto borra sus comparticiones; `anon` no lee.
-- `03_compartir.sql`: la RPC y las políticas de `contactos_compartidos`. Un lector ve pero no
+- `03_compartir.sql`: la RPC y las políticas de `contactos_compartidos`. Una compartición nace
+  `pendiente` y el destinatario no ve el contacto hasta aceptarla; tampoco puede cambiarse el rol,
+  ni el dueño aceptar por él, ni un tercero ver la invitación. Aceptada, un lector ve pero no
   edita; un editor edita, pero su `update` de `propietario_id` falla con `permission denied` y no
-  borra, no comparte ni inserta comparticiones a mano; «dejar de ver» y revocar; compartir con uno
-  mismo o con un email sin cuenta da el error previsto; el email con mayúsculas y espacios se
-  encuentra; volver a compartir cambia el rol sin duplicar; `anon` no ejecuta la RPC.
+  borra, no comparte ni inserta comparticiones a mano; «dejar de ver», rechazar y revocar;
+  compartir con uno mismo o con un email sin cuenta da el error previsto; el email con mayúsculas
+  y espacios se encuentra; volver a compartir cambia el rol sin duplicar y sin devolver la fila a
+  `pendiente`; `anon` no ejecuta la RPC ni `invitaciones_pendientes`.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
   tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`, de 100
   caracteres como mucho; el email del perfil sigue al de `auth.users`.
@@ -497,13 +507,14 @@ unset SUPABASE_SECRET_KEY
   consciente, a cambio de un error útil. Cualquier persona con sesión y un contacto propio puede
   averiguar así si un email está registrado. El registro (en producción) y la pantalla de
   recuperación de contraseña no lo revelan.
-- **Compartir no requiere aceptación del destinatario.** Quien conozca tu email puede compartirte
-  un contacto y, mientras dure esa compartición, ver el `nombre` público de tu perfil y su fecha
-  de alta (la política de `perfiles` deja ver el perfil de las contrapartes). Es la misma
-  superficie que el aviso anterior, porque el email ya lo conocía quien comparte; `nombre` es un
-  nombre público que cada usuario elige en `/perfil`. Quien
-  recibe un contacto que no quiere puede dejar de verlo; si no comparten nada más, su perfil deja
-  de ser visible para quien se lo compartió.
+- **Compartir pide aceptación, el perfil público no espera.** La fila nace `pendiente` y el
+  contacto (teléfono, email, redes) no se ve hasta que el destinatario acepta en `/mis-contactos`.
+  Rechazar borra la fila. Desde el momento de la invitación, los dos son contrapartes: cada uno ve
+  el `nombre` público y el email del perfil del otro, porque la lista de invitaciones necesita
+  saber quién invita y la política de `perfiles` no distingue el estado. Es la misma superficie que
+  el aviso anterior: quien invita ya conocía el email, y `nombre` lo elige cada usuario en
+  `/perfil`. `seed:demo` escribe sus dos comparticiones como `aceptada`; la migración hace lo mismo
+  con las filas que ya existían.
 - **La cuenta demo es pública.** Cualquiera puede cambiar los datos y la contraseña de
   `demo@jasato.com`; la RLS limita el daño a lo que esa cuenta puede ver y editar. `seed:demo`
   (idempotente) repone la contraseña, los contactos sembrados y las dos comparticiones, pero no

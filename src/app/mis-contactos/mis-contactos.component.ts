@@ -1,9 +1,19 @@
-import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  linkedSignal,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 
 import { AuthService } from '../auth/auth.service';
-import { ContactoVisible } from '../contacto';
+import { ContactoVisible, InvitacionPendiente } from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { DetallesContactoComponent } from '../detalles-contacto/detalles-contacto.component';
 import { ListaContactosComponent } from '../lista-contactos/lista-contactos.component';
@@ -43,8 +53,20 @@ export class MisContactosComponent {
     this.compartidos().filter((c) => this.coincide(c)),
   );
   protected readonly seleccionado = signal<ContactoVisible | null>(null);
+  protected readonly invitaciones = signal<InvitacionPendiente[]>([]);
 
   constructor() {
+    const documento = inject(DOCUMENT);
+    const destroyRef = inject(DestroyRef);
+    // Al volver a la pestaña la lista puede haber cambiado en otro navegador: se vuelve a pedir.
+    const alVolver = () => {
+      if (documento.visibilityState === 'visible') {
+        void this.recargar();
+      }
+    };
+    documento.addEventListener('visibilitychange', alVolver);
+    destroyRef.onDestroy(() => documento.removeEventListener('visibilitychange', alVolver));
+
     effect(() => {
       const id = this.contacto();
       if (!id) {
@@ -52,6 +74,12 @@ export class MisContactosComponent {
       }
       this.seleccionado.set(this.lista().find((c) => c.id === id) ?? null);
     });
+
+    void this.cargarInvitaciones();
+  }
+
+  protected quienInvita(invitacion: InvitacionPendiente): string {
+    return invitacion.propietario_nombre?.trim() || invitacion.propietario_email;
   }
 
   protected actualizarBusqueda(evento: Event): void {
@@ -98,6 +126,38 @@ export class MisContactosComponent {
     this.quitarDeLasListas(contacto);
   }
 
+  async aceptar(invitacion: InvitacionPendiente): Promise<void> {
+    this._mensajes.limpiar();
+    try {
+      await this._contactosService.aceptar(invitacion.contacto_id);
+    } catch (error) {
+      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      return;
+    }
+    this._mensajes.exito('Invitación aceptada');
+    await this.recargar();
+  }
+
+  async rechazar(invitacion: InvitacionPendiente): Promise<void> {
+    if (!confirm(`¿Rechazar la invitación a ${invitacion.nombre}?`)) {
+      return;
+    }
+    this._mensajes.limpiar();
+    try {
+      await this._contactosService.dejarDeCompartir(
+        invitacion.contacto_id,
+        this._auth.usuario()!.id,
+      );
+    } catch (error) {
+      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      return;
+    }
+    this.invitaciones.update((lista) =>
+      lista.filter((i) => i.contacto_id !== invitacion.contacto_id),
+    );
+    this._mensajes.exito('Invitación rechazada');
+  }
+
   verDetallesContacto(contacto: ContactoVisible): void {
     this.seleccionado.set(contacto);
     void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: contacto.id } });
@@ -116,6 +176,38 @@ export class MisContactosComponent {
     this.seleccionado.update((actual) => (actual?.id === contacto.id ? null : actual));
     this.lista.update((contactos) => contactos.filter((c) => c.id !== contacto.id));
     if (this.contacto() === contacto.id) {
+      void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
+    }
+  }
+
+  private async cargarInvitaciones(): Promise<void> {
+    try {
+      this.invitaciones.set(await this._contactosService.invitaciones());
+    } catch (error) {
+      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+    }
+  }
+
+  private async recargar(): Promise<void> {
+    try {
+      this.aplicarLista(await this._contactosService.obtenerContactos());
+    } catch (error) {
+      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      return;
+    }
+    await this.cargarInvitaciones();
+  }
+
+  // La lista nueva sustituye a la del resolver. Si el contacto abierto ya no está, se quita de la URL.
+  private aplicarLista(contactos: ContactoVisible[]): void {
+    this.lista.set(contactos);
+    const id = this.seleccionado()?.id;
+    if (!id) {
+      return;
+    }
+    const siguiente = contactos.find((c) => c.id === id) ?? null;
+    this.seleccionado.set(siguiente);
+    if (!siguiente && this.contacto() === id) {
       void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
     }
   }

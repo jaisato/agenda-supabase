@@ -12,6 +12,9 @@ export type DatosContacto = Pick<
 /** Rol con el que el propietario comparte un contacto. */
 export type Rol = Database['public']['Enums']['rol_comparticion'];
 
+/** `pendiente` hasta que el destinatario acepta; rechazar borra la fila. */
+export type EstadoComparticion = Database['public']['Enums']['estado_comparticion'];
+
 /** Rol de quien ve un contacto: `propietario` si es suyo; si no, el de su compartición. */
 export type RolVisible = 'propietario' | Rol;
 
@@ -32,4 +35,14 @@ export interface Comparticion {
   usuario_id: string;
   rol: Rol;
   email: string;
+  estado: EstadoComparticion;
+}
+
+/** Invitación que el destinatario aún no ha aceptado. No incluye el contacto entero. */
+export interface InvitacionPendiente {
+  contacto_id: string;
+  nombre: string;
+  rol: Rol;
+  propietario_nombre: string | null;
+  propietario_email: string;
 }

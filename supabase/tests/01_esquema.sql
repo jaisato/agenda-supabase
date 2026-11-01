@@ -9,7 +9,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(67);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -19,6 +19,9 @@ select has_table('public', 'contactos_compartidos', 'existe la tabla contactos_c
 select has_enum('public', 'rol_comparticion', 'existe el enum rol_comparticion');
 select enum_has_labels('public', 'rol_comparticion', array['lector', 'editor'],
   'rol_comparticion tiene los valores lector y editor');
+select has_enum('public', 'estado_comparticion', 'existe el enum estado_comparticion');
+select enum_has_labels('public', 'estado_comparticion', array['pendiente', 'aceptada'],
+  'estado_comparticion tiene los valores pendiente y aceptada');
 
 select has_function('privado', 'es_propietario', array['uuid'],
   'existe privado.es_propietario(uuid)');
@@ -29,10 +32,14 @@ select has_function('privado', 'es_contraparte', array['uuid'],
 select has_function('privado', 'crear_perfil', 'existe privado.crear_perfil');
 select has_function('privado', 'marcar_actualizado', 'existe privado.marcar_actualizado');
 select has_function('privado', 'recortar_contacto', 'existe privado.recortar_contacto');
+select has_function('privado', 'guardar_comparticion', 'existe privado.guardar_comparticion');
+select has_function('public', 'invitaciones_pendientes', 'existe public.invitaciones_pendientes');
 select has_trigger('public', 'contactos', 'marcar_actualizado',
   'contactos tiene el trigger marcar_actualizado');
 select has_trigger('public', 'contactos', 'recortar_contacto',
   'contactos tiene el trigger recortar_contacto');
+select has_trigger('public', 'contactos_compartidos', 'guardar_comparticion',
+  'contactos_compartidos tiene el trigger guardar_comparticion');
 
 -- RLS activada en las tres tablas
 select is((select relrowsecurity from pg_class where oid = 'public.perfiles'::regclass), true,
@@ -54,8 +61,8 @@ select policies_are('public', 'contactos',
   'contactos tiene exactamente sus cuatro políticas');
 select policies_are('public', 'contactos_compartidos',
   array['compartidos: ver el compartido o el dueño', 'compartidos: cambiar rol el dueño',
-        'compartidos: revocar el dueño o dejar de ver'],
-  'contactos_compartidos tiene exactamente sus tres políticas');
+        'compartidos: aceptar el destinatario', 'compartidos: revocar el dueño o dejar de ver'],
+  'contactos_compartidos tiene exactamente sus cuatro políticas');
 
 select policy_roles_are('public', 'perfiles', 'perfiles: ver el propio y las contrapartes',
   array['authenticated'], '«perfiles: ver el propio y las contrapartes» es solo de authenticated');
@@ -74,6 +81,8 @@ select policy_roles_are('public', 'contactos_compartidos',
   '«compartidos: ver el compartido o el dueño» es solo de authenticated');
 select policy_roles_are('public', 'contactos_compartidos', 'compartidos: cambiar rol el dueño',
   array['authenticated'], '«compartidos: cambiar rol el dueño» es solo de authenticated');
+select policy_roles_are('public', 'contactos_compartidos', 'compartidos: aceptar el destinatario',
+  array['authenticated'], '«compartidos: aceptar el destinatario» es solo de authenticated');
 select policy_roles_are('public', 'contactos_compartidos',
   'compartidos: revocar el dueño o dejar de ver', array['authenticated'],
   '«compartidos: revocar el dueño o dejar de ver» es solo de authenticated');
@@ -102,6 +111,8 @@ select table_privs_are('public', 'contactos_compartidos', 'authenticated',
   array['SELECT', 'DELETE'], 'authenticated lee y borra contactos_compartidos, sin insertar');
 select column_privs_are('public', 'contactos_compartidos', 'rol', 'authenticated',
   array['SELECT', 'UPDATE'], 'authenticated actualiza contactos_compartidos.rol');
+select column_privs_are('public', 'contactos_compartidos', 'estado', 'authenticated',
+  array['SELECT', 'UPDATE'], 'authenticated actualiza contactos_compartidos.estado');
 
 select table_privs_are('public', 'perfiles', 'authenticated', array['SELECT'],
   'authenticated solo lee perfiles a nivel de tabla');
@@ -134,6 +145,12 @@ select function_privs_are('privado', 'marcar_actualizado', '{}'::name[], 'authen
   '{}'::text[], 'authenticated no ejecuta privado.marcar_actualizado()');
 select function_privs_are('privado', 'recortar_contacto', '{}'::name[], 'authenticated',
   '{}'::text[], 'authenticated no ejecuta privado.recortar_contacto()');
+select function_privs_are('privado', 'guardar_comparticion', '{}'::name[], 'authenticated',
+  '{}'::text[], 'authenticated no ejecuta privado.guardar_comparticion()');
+select function_privs_are('public', 'invitaciones_pendientes', '{}'::name[], 'anon', '{}'::text[],
+  'anon no ejecuta public.invitaciones_pendientes()');
+select function_privs_are('public', 'invitaciones_pendientes', '{}'::name[], 'authenticated',
+  array['EXECUTE'], 'authenticated ejecuta public.invitaciones_pendientes()');
 
 -- Ninguna función de privado, presente o futura, conserva el EXECUTE de public. Un alter default
 -- privileges in schema privado no lo evita (ver la migración): esta aserción es la red de seguridad,

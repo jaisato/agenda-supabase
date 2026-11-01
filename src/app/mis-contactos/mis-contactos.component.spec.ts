@@ -3,6 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { PostgrestError, Session } from '@supabase/supabase-js';
 import { MockInstance } from 'vitest';
 
+import { InvitacionPendiente } from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { MensajesService } from '../mensajes.service';
 import { SUPABASE } from '../supabase/supabase.client';
@@ -414,5 +415,119 @@ describe('MisContactosComponent', () => {
       ['https://www.facebook.com/tim.cook', '_blank', 'noopener,noreferrer'],
       ['https://twitter.com/timcook', '_blank', 'noopener,noreferrer'],
     ]);
+  });
+
+  it('al volver a la pestaña vuelve a pedir los contactos y las invitaciones', async () => {
+    const service = TestBed.inject(ContactosService);
+    const obtener = vi.spyOn(service, 'obtenerContactos').mockResolvedValue([tim, bill]);
+    const pedirInvitaciones = vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await reposar();
+
+    expect(obtener).toHaveBeenCalledOnce();
+    expect(pedirInvitaciones).toHaveBeenCalledOnce();
+  });
+
+  it('ocultar la pestaña no recarga la lista', async () => {
+    const obtener = vi.spyOn(TestBed.inject(ContactosService), 'obtenerContactos');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await reposar();
+
+    expect(obtener).not.toHaveBeenCalled();
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+  });
+
+  describe('invitaciones', () => {
+    const invitacion: InvitacionPendiente = {
+      contacto_id: 'c9',
+      nombre: 'Ada',
+      rol: 'lector',
+      propietario_nombre: 'Invitado',
+      propietario_email: 'invitado@test.es',
+    };
+    const botonDe = (texto: string) =>
+      Array.from(elemento.querySelectorAll('button')).find(
+        (boton) => boton.textContent?.trim() === texto,
+      )!;
+
+    const montar = async (fila = invitacion) => {
+      fixture.destroy();
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'invitaciones').mockResolvedValue([fila]);
+      fixture = TestBed.createComponent(MisContactosComponent);
+      elemento = fixture.nativeElement;
+      fixture.componentRef.setInput('contactos', [tim]);
+      await reposar();
+      return service;
+    };
+
+    it('pinta quién invita y avisa de que el contacto aparece al aceptar', async () => {
+      await montar();
+
+      expect(elemento.textContent).toContain('Invitaciones');
+      expect(elemento.textContent).toContain('Ada');
+      expect(elemento.textContent).toContain('de Invitado');
+      expect(elemento.textContent).toContain(
+        'Cuando aceptes una invitación, el contacto aparecerá aquí.',
+      );
+    });
+
+    it('sin nombre público enseña el email de quien invita', async () => {
+      await montar({ ...invitacion, propietario_nombre: null });
+
+      expect(elemento.textContent).toContain('de invitado@test.es');
+    });
+
+    it('aceptar incorpora el contacto a «Compartidos conmigo»', async () => {
+      const service = await montar();
+      vi.spyOn(service, 'aceptar').mockResolvedValue();
+      vi.spyOn(service, 'obtenerContactos').mockResolvedValue([
+        tim,
+        contactoVisibleDePrueba('lector', {
+          id: 'c9',
+          propietario_id: 'u2',
+          nombre: 'Ada',
+          apellidos: '',
+        }),
+      ]);
+      vi.mocked(service.invitaciones).mockResolvedValue([]);
+
+      await clic(botonDe('Aceptar'));
+
+      expect(service.aceptar).toHaveBeenCalledExactlyOnceWith('c9');
+      expect(nombres('compartidos')).toEqual(['Ada']);
+      expect(elemento.textContent).not.toContain('Aceptar');
+      expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Invitación aceptada' });
+    });
+
+    it('rechazar, tras confirmar, borra la compartición', async () => {
+      const service = await montar();
+      const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.spyOn(service, 'dejarDeCompartir').mockResolvedValue();
+
+      await clic(botonDe('Rechazar'));
+
+      expect(confirmar).toHaveBeenCalledWith('¿Rechazar la invitación a Ada?');
+      expect(service.dejarDeCompartir).toHaveBeenCalledExactlyOnceWith('c9', 'u1');
+      expect(elemento.textContent).not.toContain('Ada');
+      expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Invitación rechazada' });
+    });
+
+    it('si no se confirma el rechazo, la invitación sigue', async () => {
+      const service = await montar();
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const dejar = vi.spyOn(service, 'dejarDeCompartir');
+
+      await clic(botonDe('Rechazar'));
+
+      expect(dejar).not.toHaveBeenCalled();
+      expect(elemento.textContent).toContain('Ada');
+    });
   });
 });
