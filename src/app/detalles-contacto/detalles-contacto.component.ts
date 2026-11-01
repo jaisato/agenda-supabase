@@ -13,6 +13,20 @@ import { ContactoVisible } from '../contacto';
 export class DetallesContactoComponent {
   readonly contacto = input<ContactoVisible | null>(null);
 
+  protected linea(contacto: ContactoVisible): string {
+    return [contacto.telefono, contacto.email].filter((parte) => parte.trim()).join(' | ');
+  }
+
+  protected actualizado(iso: string): string {
+    return new Intl.DateTimeFormat('es', { dateStyle: 'medium', timeStyle: 'short' }).format(
+      new Date(iso),
+    );
+  }
+
+  protected tienePerfil(valor: string): boolean {
+    return valor.trim().length > 0;
+  }
+
   // Usamos la función 'output' para notificar datos de salida.
   readonly eliminar = output<ContactoVisible>();
   // Usamos 'emit' para notificar eventos.

@@ -13,7 +13,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(21);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -119,6 +119,19 @@ select results_eq(
   $$select count(*)::int from public.contactos_compartidos
     where usuario_id = pruebas.id_usuario('b@test.local')$$,
   array[0], 'borrar el contacto borra en cascada sus comparticiones');
+
+-- El trigger recortar_contacto quita los espacios de los extremos. Un nombre que queda vacío no
+-- cumple el check de longitud.
+select pruebas.autenticar('a@test.local');
+select lives_ok(
+  $$insert into public.contactos (nombre, apellidos, email) values ('  Grace  ', '  Hopper  ', '  g@x.test  ')$$,
+  'A crea un contacto con espacios en los extremos');
+select results_eq(
+  $$select nombre || '|' || apellidos || '|' || email from public.contactos where nombre = 'Grace'$$,
+  array['Grace|Hopper|g@x.test'],
+  'el trigger recorta los extremos de los textos');
+select throws_ok($$insert into public.contactos (nombre) values ('   ')$$, '23514', null,
+  'un nombre de solo espacios no se guarda');
 
 -- Un visitante sin sesión no tiene privilegio de select sobre contactos: error, no cero filas.
 select pruebas.anonimo();

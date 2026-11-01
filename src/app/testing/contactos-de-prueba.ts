@@ -1,4 +1,4 @@
-import { Contacto, ContactoVisible, RolVisible } from '../contacto';
+import { Contacto, ContactoVisible, PropietarioVisible, RolVisible } from '../contacto';
 
 /**
  * Una fila completa de `contactos` para las pruebas. Lo que no se indica toma un valor de relleno
@@ -24,6 +24,7 @@ export function contactoDePrueba(campos: Partial<Contacto> = {}): Contacto {
 export function contactoVisibleDePrueba(
   rol: RolVisible,
   campos: Partial<Contacto> = {},
+  propietario: PropietarioVisible = { nombre: null, email: '' },
 ): ContactoVisible {
-  return { ...contactoDePrueba(campos), rol };
+  return { ...contactoDePrueba(campos), rol, propietario };
 }

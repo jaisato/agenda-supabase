@@ -52,14 +52,15 @@ describe('FormularioContactoComponent', () => {
     expect(boton().textContent?.trim()).toBe('Añadir');
   });
 
-  it('deshabilita «Añadir» hasta que todos los campos tienen valor', async () => {
+  it('deshabilita «Añadir» hasta que hay un nombre; el resto de campos puede quedar vacío', async () => {
     expect(boton().disabled).toBe(true);
+    expect(campo('apellidos').required).toBe(false);
+    expect(campo('email').required).toBe(false);
+    expect(campo('facebook').required).toBe(false);
+    expect(campo('twitter').required).toBe(false);
 
-    const { twitter, ...todosMenosTwitter } = tim;
-    await escribir(todosMenosTwitter);
-    expect(boton().disabled).toBe(true);
+    await escribir({ nombre: 'Tim' });
 
-    await escribir({ twitter });
     expect(boton().disabled).toBe(false);
   });
 
@@ -68,6 +69,26 @@ describe('FormularioContactoComponent', () => {
 
     expect(campo('nombre').required).toBe(true);
     expect(boton().disabled).toBe(true);
+  });
+
+  it('un nombre de solo espacios no se puede enviar', async () => {
+    await escribir({ nombre: '   ' });
+    await tocar('nombre');
+
+    expect(boton().disabled).toBe(true);
+    expect(errores()).toEqual(['El nombre no puede ser solo espacios']);
+  });
+
+  it('un email mal formado no se puede enviar; vacío sí', async () => {
+    await escribir({ nombre: 'Tim', email: 'no-es-un-email' });
+    await tocar('email');
+
+    expect(campo('email').type).toBe('email');
+    expect(boton().disabled).toBe(true);
+    expect(errores()).toEqual(['Escribe un email válido']);
+
+    await escribir({ email: '' });
+    expect(boton().disabled).toBe(false);
   });
 
   it('cada campo admite como mucho la longitud que deja la base de datos: si se pasa, no se puede añadir', async () => {
@@ -89,26 +110,36 @@ describe('FormularioContactoComponent', () => {
     expect(boton().disabled).toBe(true);
   });
 
-  it('muestra los mensajes de campo obligatorio solo tras tocar el campo vacío', async () => {
+  it('muestra el aviso de nombre obligatorio solo tras tocar el campo vacío', async () => {
     expect(errores()).toEqual([]);
 
     await tocar('nombre');
     expect(errores()).toEqual(['El nombre es un campo obligatorio']);
 
-    await tocar('apellidos');
-    expect(errores()).toEqual([
-      'El nombre es un campo obligatorio',
-      'El campo apellidos es obligatorio',
-    ]);
-
     await escribir({ nombre: 'Tim' });
-    expect(errores()).toEqual(['El campo apellidos es obligatorio']);
+    expect(errores()).toEqual([]);
   });
 
   it('al pulsar «Añadir» emite los datos con los valores del formulario', async () => {
     const guardados = emitidos();
 
     await escribir(tim);
+    boton().click();
+
+    expect(guardados).toEqual([tim]);
+  });
+
+  it('al pulsar «Añadir» recorta los espacios de los extremos', async () => {
+    const guardados = emitidos();
+
+    await escribir({
+      nombre: '  Tim  ',
+      apellidos: ' Cook ',
+      email: ' tim.cook@apple.com ',
+      telefono: ' 555-123456 ',
+      facebook: ' tim.cook ',
+      twitter: ' @timcook ',
+    });
     boton().click();
 
     expect(guardados).toEqual([tim]);

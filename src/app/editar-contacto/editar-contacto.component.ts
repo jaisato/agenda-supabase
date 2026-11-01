@@ -58,7 +58,7 @@ export class EditarContactoComponent implements OnInit {
       return;
     }
     this._mensajes.exito('Contacto guardado');
-    await this._router.navigate(['/mis-contactos']);
+    await this._router.navigate(['/mis-contactos'], { queryParams: { contacto: id } });
   }
 
   private sinAcceso(): Promise<boolean> {

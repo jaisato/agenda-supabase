@@ -15,9 +15,16 @@ export type Rol = Database['public']['Enums']['rol_comparticion'];
 /** Rol de quien ve un contacto: `propietario` si es suyo; si no, el de su compartición. */
 export type RolVisible = 'propietario' | Rol;
 
+/** Dueño de un contacto, tal como lo deja ver la política de perfiles. */
+export interface PropietarioVisible {
+  nombre: string | null;
+  email: string;
+}
+
 /** Un contacto tal como lo ve la persona con la sesión abierta. */
 export interface ContactoVisible extends Contacto {
   rol: RolVisible;
+  propietario: PropietarioVisible;
 }
 
 /** Una persona con acceso a un contacto compartido. */

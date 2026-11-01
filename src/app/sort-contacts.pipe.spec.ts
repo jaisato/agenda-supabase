@@ -33,6 +33,20 @@ describe('SortContactsPipe', () => {
     ]);
   });
 
+  it('ordena eñes y tildes como en español', () => {
+    const conTilde = [
+      contacto('Ñu', 'Andino'),
+      contacto('Nicolas', 'Perez'),
+      contacto('Álvaro', 'Sanz'),
+    ];
+
+    expect(pipe.transform(conTilde, 'asc').map(nombreCompleto)).toEqual([
+      'Álvaro Sanz',
+      'Nicolas Perez',
+      'Ñu Andino',
+    ]);
+  });
+
   it('no reordena el array que recibe', () => {
     const original = [...contactos];
     pipe.transform(contactos, 'asc');

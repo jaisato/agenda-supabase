@@ -128,7 +128,9 @@ describe('EditarContactoComponent', () => {
         },
       ]);
       expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Contacto guardado' });
-      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], {
+        queryParams: { contacto: 'c7' },
+      });
     });
 
     it('si el guardado falla, avisa del error, no navega y deja el formulario con lo escrito', async () => {
@@ -161,7 +163,9 @@ describe('EditarContactoComponent', () => {
       await reposar();
 
       expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Contacto guardado' });
-      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], {
+        queryParams: { contacto: 'c7' },
+      });
     });
 
     // El dueño lo borra, o deja de compartirlo, con el formulario ya abierto: el update no toca

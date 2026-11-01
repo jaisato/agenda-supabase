@@ -9,7 +9,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(57);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -28,8 +28,11 @@ select has_function('privado', 'es_contraparte', array['uuid'],
   'existe privado.es_contraparte(uuid)');
 select has_function('privado', 'crear_perfil', 'existe privado.crear_perfil');
 select has_function('privado', 'marcar_actualizado', 'existe privado.marcar_actualizado');
+select has_function('privado', 'recortar_contacto', 'existe privado.recortar_contacto');
 select has_trigger('public', 'contactos', 'marcar_actualizado',
   'contactos tiene el trigger marcar_actualizado');
+select has_trigger('public', 'contactos', 'recortar_contacto',
+  'contactos tiene el trigger recortar_contacto');
 
 -- RLS activada en las tres tablas
 select is((select relrowsecurity from pg_class where oid = 'public.perfiles'::regclass), true,
@@ -129,6 +132,8 @@ select function_privs_are('privado', 'crear_perfil', '{}'::name[], 'authenticate
   'authenticated no ejecuta privado.crear_perfil()');
 select function_privs_are('privado', 'marcar_actualizado', '{}'::name[], 'authenticated',
   '{}'::text[], 'authenticated no ejecuta privado.marcar_actualizado()');
+select function_privs_are('privado', 'recortar_contacto', '{}'::name[], 'authenticated',
+  '{}'::text[], 'authenticated no ejecuta privado.recortar_contacto()');
 
 -- Ninguna función de privado, presente o futura, conserva el EXECUTE de public. Un alter default
 -- privileges in schema privado no lo evita (ver la migración): esta aserción es la red de seguridad,
