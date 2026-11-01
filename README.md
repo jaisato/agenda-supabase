@@ -60,7 +60,7 @@ demo y está compartido con invitado como `lector`. Para ver cómo cambia la int
 - En «Compartidos conmigo», Ada Lovelace lleva la etiqueta `editor`; su detalle ofrece «Editar» y
   «Dejar de ver», pero no «Eliminar contacto».
 - En Tim Cook, que es propio, «Compartir» abre la lista de personas con acceso, donde se cambia el
-  rol o se revoca.
+  rol o se revoca, y las invitaciones a un email que todavía no tiene cuenta.
 - También puedes crear tu propia cuenta: la confirmas con el enlace que llega por correo.
 
 La cuenta demo es pública: cualquiera puede cambiar sus datos (ver
@@ -73,7 +73,7 @@ contactos sembrados y las dos comparticiones (ver [Restaurar la demo](#restaurar
 Navegador ── Angular 22 (GitHub Pages) ── supabase-js (publishable key + JWT del usuario)
                                               │
                       ┌───────────────────────┼───────────────────────┐
-                 Auth (GoTrue)          Data API (PostgREST)      (Storage/Realtime: no en v1)
+                 Auth (GoTrue)          Data API (PostgREST)       Storage y Realtime
                  correo vía Resend             │
                                         Postgres 17 ── RLS + permisos por columna
                                                    ── privado.* (SECURITY DEFINER)
@@ -82,23 +82,27 @@ Navegador ── Angular 22 (GitHub Pages) ── supabase-js (publishable key +
 
 La aplicación nunca usa la clave secreta. Toda autorización se decide en Postgres con la identidad
 del JWT (`auth.uid()`); la app solo decide qué botones mostrar a partir del rol que ya le llega
-filtrado. El esquema está en
-[`supabase/migrations/20261011114625_inicial.sql`](supabase/migrations/20261011114625_inicial.sql)
-(más el límite de 100 caracteres de `perfiles.nombre`, que añade la migración siguiente) y el
-diseño, con las alternativas descartadas, en
-[`docs/superpowers/specs/2026-10-10-agenda-supabase-design.md`](docs/superpowers/specs/2026-10-10-agenda-supabase-design.md).
+filtrado. El esquema está en [`supabase/migrations`](supabase/migrations). El diseño de la primera
+versión, con las alternativas descartadas, sigue en
+[`docs/superpowers/specs/2026-10-10-agenda-supabase-design.md`](docs/superpowers/specs/2026-10-10-agenda-supabase-design.md);
+lo que describe esta página es el comportamiento actual.
 
 ### Modelo de datos
 
-- `perfiles`: una fila por usuario de `auth.users` (`email`, `nombre`, `creado_en`), que mantiene
-  el trigger `privado.crear_perfil`.
+- `perfiles`: una fila por usuario de `auth.users` (`email`, `nombre`, `avatar_ruta`, `creado_en`),
+  que mantiene el trigger `privado.crear_perfil`. `avatar_ruta` apunta al fichero del bucket
+  privado `avatares` (`<id>/avatar.jpg`, `.png` o `.webp`) o es nula.
 - `contactos`: los contactos. `propietario_id` es el dueño y por defecto vale `auth.uid()`.
 - `contactos_compartidos`: quién tiene acceso a qué contacto, con qué rol (`rol_comparticion`:
   `lector` o `editor`) y en qué estado (`estado_comparticion`: `pendiente` o `aceptada`).
+- `invitaciones_contacto`: un email que todavía no tiene cuenta, el contacto y el rol. La clave es
+  `(contacto_id, email)`. Cuando esa persona se registra, `privado.crear_perfil` la convierte en
+  una compartición `pendiente` y borra la invitación.
 - `privado.*`: funciones `SECURITY DEFINER` (para las políticas) y de trigger. El esquema no está
   expuesto en la Data API.
 - `public.compartir_contacto(p_contacto_id, p_email, p_rol)`: la RPC con la que se comparte un
-  contacto y la única forma de crear una compartición.
+  contacto y la única forma de crear una compartición o una invitación por email. Devuelve
+  `resultado_compartir` (`usuario_id`, `rol`, `estado`, `email`, `sin_cuenta`).
 
 ### Quién puede qué
 
@@ -118,6 +122,11 @@ no puede aceptar por el otro. Volver a compartir cambia el rol y no devuelve a `
 ya aceptada. `anon` no ejecuta `invitaciones_pendientes()`, que devuelve solo el nombre del
 contacto y quién invita.
 
+Si el email no tiene cuenta, la RPC no falla: guarda la fila en `invitaciones_contacto` y responde
+`sin_cuenta`. El propietario la ve y puede borrarla; nadie más, y nadie la inserta a mano. Al
+registrarse, la invitación se convierte en una compartición `pendiente`, salvo que el contacto sea
+del propio usuario. Quien invita distingue «tiene cuenta» de «sin cuenta todavía».
+
 ### Por qué RLS y privilegios por columna
 
 - **RLS decide qué filas.** Un contacto lo ve su propietario o quien tiene una compartición aceptada; lo edita el propietario o un editor; lo borra solo el propietario. Todas las políticas son
@@ -128,7 +137,9 @@ contacto y quién invita.
   sobre `nombre`, `apellidos`, `email`, `telefono`, `facebook` y `twitter`. Un `update` que toque
   `propietario_id` o `id` falla con `permission denied` (`42501`) antes de llegar a las políticas.
   Por la misma razón `insert` no incluye `propietario_id`: el dueño sale siempre del
-  `default auth.uid()`.
+  `default auth.uid()`. En `perfiles`, `authenticated` solo actualiza `nombre` y `avatar_ruta`. El
+  email lo copia `privado.crear_perfil` desde `auth.users`, y un trigger rechaza una `avatar_ruta`
+  que no sea el fichero del propio usuario.
 - **`anon` no tiene ningún privilegio.** Supabase concede por defecto todos los privilegios de las
   tablas nuevas de `public` a `anon` y `authenticated`; la migración los revoca y concede solo lo
   necesario. Sin sesión, la Data API responde `401` con `42501` (ver [Tests](#tests)).
@@ -138,15 +149,25 @@ contacto y quién invita.
   tabla sin pasar por su RLS (`SECURITY DEFINER`, `set search_path = ''`). Postgres concede
   `EXECUTE` a `public` por defecto: la migración lo revoca y solo `authenticated` ejecuta estas
   tres.
-- **Solo la RPC crea comparticiones.** `contactos_compartidos` no tiene `insert`. La función
-  `compartir_contacto` comprueba que quien llama es el propietario, busca a la persona por email
-  en `perfiles` (que cada usuario solo lee en parte: el suyo y los de sus contrapartes, es decir,
-  quien le comparte contactos y aquellos con quienes los comparte), normaliza el email (minúsculas
-  y sin espacios en los extremos) y, si ya estaba compartido, cambia el rol en vez de duplicar.
-  Sus errores son `42501` (quien llama no es el propietario), `PT404` (no hay nadie con ese email)
-  y `22023` (compartir con uno mismo). `PT404` y no `P0002`: PostgREST responde `500` a
-  `P0002`, y un código `PTxxx` llega al cliente con el estado `xxx` y `code: 'PT404'`. La
-  aplicación distingue los errores por `error.code`, nunca por el estado HTTP.
+- **Solo la RPC crea comparticiones e invitaciones por email.** `contactos_compartidos` no tiene
+  `insert`, y `invitaciones_contacto` tampoco. La función `compartir_contacto` comprueba que quien
+  llama es el propietario, normaliza el email (minúsculas y sin espacios en los extremos) y, si ya
+  estaba compartido, cambia el rol en vez de duplicar y sin tocar el estado. Si el email tiene
+  perfil, crea o actualiza la compartición. Si no lo tiene, hace lo mismo en `invitaciones_contacto`
+  y devuelve `sin_cuenta`. No busca el email con un `select` del cliente sobre `perfiles`: cada
+  usuario solo lee el suyo y los de sus contrapartes. Sus errores son `42501` (quien llama no es el
+  propietario) y `22023` (email vacío, sin `@`, demasiado largo, o el propio). La aplicación
+  distingue los errores por `error.code`, nunca por el estado HTTP. Un `PT404` de una base anterior
+  («no hay nadie con ese email») se sigue traduciendo en el cliente; esta RPC ya no lo usa.
+  `P0002` no servía para aquel caso: PostgREST responde `500` a `P0002`, y un código `PTxxx` llega
+  con el estado `xxx`.
+- **El avatar es un fichero privado.** El bucket `avatares` no es público (1 MB, JPEG, PNG o WebP).
+  Las políticas de `storage.objects` dejan al dueño subir, sustituir y borrar solo
+  `<su id>/avatar.jpg|png|webp`, y leer el suyo o el de una contraparte (`privado.es_contraparte`,
+  también con la invitación pendiente). El cliente pide una URL firmada de una hora.
+  `storage.protect_delete()` impide un `delete` directo por SQL; el borrado va por la API de
+  Storage. `anon` conserva los privilegios de tabla que pone Supabase sobre `storage.objects`; sin
+  política no ve filas, y la migración no se los quita.
 
 ### La aplicación Angular
 
@@ -155,20 +176,27 @@ inputs y los eventos de las plantillas, así que lo que cambia después de un `a
 signals. Los estilos son skeleton-css y Font Awesome 4.7, declarados en `angular.json`. Las rutas
 están en `src/app/app.routes.ts`:
 
-- `/entrar`, `/registro` y `/auth/recuperar`: solo sin sesión (`sinSesionGuard`).
-- `/auth/confirmar` y `/auth/nueva-contrasena`: destino de los enlaces de los correos
-  (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión.
+- `/entrar`, `/registro` y `/auth/recuperar`: solo sin sesión (`sinSesionGuard`). Entrar y
+  registrarse ofrecen Google y GitHub además del email. Los tres formularios envían un token de
+  hCaptcha cuando hay site key.
+- `/auth/confirmar` y `/auth/nueva-contrasena`: destino de los enlaces de los correos y de la
+  vuelta de OAuth (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión.
 - `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con búsqueda, la etiqueta del rol y
   el detalle del seleccionado; `?contacto=` conserva la selección; las invitaciones pendientes se
-  aceptan o se rechazan ahí, y al volver a la pestaña se vuelve a pedir la lista), `/nuevo-contacto`,
-  `/contactos/:id/editar`, `/contactos/:id/compartir` y `/perfil` (nombre público y cambio de
+  aceptan o se rechazan ahí), `/nuevo-contacto`, `/contactos/:id/editar`,
+  `/contactos/:id/compartir` y `/perfil` (nombre público, avatar, cambio de email y cambio de
   contraseña con la sesión abierta): llevan `authGuard`, que sin sesión redirige a `/entrar`.
 - Cualquier otra ruta redirige a `/mis-contactos`.
 
 En un contacto solo el nombre es obligatorio. Email, teléfono, Facebook y Twitter pueden quedar
 vacíos; el email, si se escribe, tiene que ser válido. Un trigger recorta los extremos antes de
-guardar. En el detalle de un contacto compartido se ve quién lo comparte. `/perfil` escribe
-`perfiles.nombre`, que la barra muestra en lugar del email cuando existe.
+guardar. En el detalle de un contacto compartido se ve quién lo comparte, con su avatar si tiene.
+`/perfil` escribe `perfiles.nombre` y `perfiles.avatar_ruta`. La barra muestra el nombre en lugar
+del email cuando existe, y el avatar junto a él. El cambio de email lo confirma GoTrue en las dos
+bandejas; la pantalla no sustituye el email hasta que el perfil se vuelve a leer. La lista y la
+pantalla de compartir se vuelven a pedir cuando Realtime avisa de un cambio en `contactos`,
+`contactos_compartidos` o `invitaciones_contacto`, y también al volver a la pestaña. El canal se
+llama `agenda-<id>`: el cliente no parchea filas, vuelve a consultar.
 
 `AuthService` expone la sesión como signals; `ContactosService` envuelve las consultas, la RPC y
 las comparticiones con Promesas; `MensajesService` pinta el aviso global y traduce los errores
@@ -235,6 +263,14 @@ producción), pero los correos no salen a Internet: llegan a Mailpit, en
 <http://127.0.0.1:54324>. Abre ahí el enlace de confirmación en el mismo navegador en que te
 registraste (ver [Decisiones y límites](#decisiones-y-límites)).
 
+En local, hCaptcha está activado con las claves de prueba del editor (siempre pasan). Ese bloque de
+`supabase/config.toml` se aplica en el siguiente `npx supabase start`; un stack que ya estaba en
+marcha no lo recoge. La site key de desarrollo está en `environment.development.ts`. La de
+producción (`environment.ts`) va vacía a propósito: el widget no se carga y la demo sigue
+aceptando el registro. Google y GitHub están en el cliente y en `config.toml`, pero
+`enabled = false` hasta que haya client id y secreto. Activarlos con el secreto vacío rompe el
+siguiente `supabase start`. En local, Google suele necesitar además `skip_nonce_check = true`.
+
 Para parar el stack, `npx supabase stop`. Para dejar la base local limpia, `npx supabase db reset`:
 borra también la demo, así que vuelve a lanzar `seed:demo`.
 
@@ -278,8 +314,9 @@ Para ejecutar un solo fichero:
 
 **Vitest** (`src/**/*.spec.ts`, con jsdom) prueba la aplicación con un doble del cliente de
 Supabase, `src/app/testing/supabase-falso.ts` (con su propio spec de contrato), que simula las
-cadenas `from().select().eq()…` y `rpc()`. No toca la red. La autorización no se prueba aquí, sino
-en pgTAP.
+cadenas `from().select().eq()…` y `rpc()`. No toca la red. Compila `environment.ts` (site key
+vacía), no el de desarrollo: así el widget de hCaptcha no se carga y los formularios de auth se
+envían como en la demo. La autorización no se prueba aquí, sino en pgTAP.
 
 **pgTAP** (`supabase/tests/*.sql`): cada fichero corre dentro de una transacción que se deshace,
 crea sus usuarios con `pruebas.crear_usuario(…)` y cambia de identidad con
@@ -287,24 +324,32 @@ crea sus usuarios con `pruebas.crear_usuario(…)` y cambia de identidad con
 como hace PostgREST. Esos helpers `pruebas.*` viven en `supabase/seed.sql`: existen en las bases
 locales y nunca se despliegan.
 
-- `01_esquema.sql`: tablas, enum y funciones; RLS activada en las tres tablas; las políticas
-  exactas de cada tabla, todas solo para `authenticated`; los privilegios exactos (`anon` sin
-  ninguno, `authenticated` con `insert` y `update` solo en las columnas de datos); el `EXECUTE` de
-  las funciones de `privado`, y que ninguna sea ejecutable por `public`.
+- `01_esquema.sql`: tablas, enums y funciones; RLS activada en `perfiles`, `contactos`,
+  `contactos_compartidos` e `invitaciones_contacto`; las políticas exactas de cada tabla, todas
+  solo para `authenticated`; los privilegios exactos (`anon` sin ninguno, `authenticated` con
+  `insert` y `update` solo en las columnas de datos, y `update` de `perfiles` solo en `nombre` y
+  `avatar_ruta`); el `EXECUTE` de las funciones de `privado`, y que ninguna sea ejecutable por
+  `public`; las tres tablas de la publicación `supabase_realtime`.
 - `02_contactos.sql`: cada usuario ve y toca solo lo suyo (otro usuario no ve, edita ni borra sus
   contactos); insertar un contacto a nombre de otro falla con `42501`; semántica de lector y
   editor; borrar un contacto borra sus comparticiones; `anon` no lee.
-- `03_compartir.sql`: la RPC y las políticas de `contactos_compartidos`. Una compartición nace
-  `pendiente` y el destinatario no ve el contacto hasta aceptarla; tampoco puede cambiarse el rol,
-  ni el dueño aceptar por él, ni un tercero ver la invitación. Aceptada, un lector ve pero no
-  edita; un editor edita, pero su `update` de `propietario_id` falla con `permission denied` y no
-  borra, no comparte ni inserta comparticiones a mano; «dejar de ver», rechazar y revocar;
-  compartir con uno mismo o con un email sin cuenta da el error previsto; el email con mayúsculas
-  y espacios se encuentra; volver a compartir cambia el rol sin duplicar y sin devolver la fila a
-  `pendiente`; `anon` no ejecuta la RPC ni `invitaciones_pendientes`.
+- `03_compartir.sql`: la RPC y las políticas de `contactos_compartidos` e `invitaciones_contacto`.
+  Una compartición nace `pendiente` y el destinatario no ve el contacto hasta aceptarla; tampoco
+  puede cambiarse el rol, ni el dueño aceptar por él, ni un tercero ver la invitación. Aceptada,
+  un lector ve pero no edita; un editor edita, pero su `update` de `propietario_id` falla con
+  `permission denied` y no borra, no comparte ni inserta comparticiones a mano; «dejar de ver»,
+  rechazar y revocar; compartir con uno mismo da el error previsto; un email sin cuenta guarda una
+  invitación (`sin_cuenta`) y, al crear la cuenta, se convierte en compartición `pendiente`; el
+  email con mayúsculas y espacios se encuentra; volver a compartir cambia el rol sin duplicar y
+  sin devolver la fila a `pendiente`; `anon` no ejecuta la RPC ni `invitaciones_pendientes`.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
   tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`, de 100
-  caracteres como mucho; el email del perfil sigue al de `auth.users`.
+  caracteres como mucho, y la ruta de su avatar; una ruta de otra persona falla con `22023`; el
+  email del perfil sigue al de `auth.users`.
+- `05_avatares.sql`: el bucket `avatares` es privado y limita a 1 MB; solo el dueño inserta su
+  `avatar.jpg`, `.png` o `.webp`; lo lee él y una contraparte, también con la compartición
+  pendiente; un tercero y `anon` no. El `delete` directo sobre `storage.objects` lo impide
+  `storage.protect_delete()`: el test comprueba el nombre de la política, no el borrado por SQL.
 
 **Sin sesión no se ve nada.** Con el stack local en marcha:
 
@@ -324,9 +369,12 @@ paralelo. Son los dos checks que exige la protección de `master`.
 
 - **«Build, tests y npm audit»**: `npm ci`, `npx ng build`, `npx ng test --watch=false` y
   `npm audit --audit-level=low`.
-- **«Base de datos»**: arranca el stack local sin los servicios que la agenda no usa
-  (`npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio`),
-  y ejecuta `npx supabase db reset`, `npx supabase test db`,
+- **«Base de datos»**: arranca el stack local sin los contenedores de Realtime, Storage, imgproxy,
+  edge-runtime, logflare, vector, supavisor y Studio
+  (`npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio`).
+  El esquema de Storage y la publicación `supabase_realtime` viven en Postgres, así que pgTAP
+  comprueba las políticas del bucket y la pertenencia a la publicación sin esas APIs. Después
+  ejecuta `npx supabase db reset`, `npx supabase test db`,
   `npx supabase db lint --local --fail-on warning` y la comprobación de que
   `src/app/supabase/database.types.ts` coincide con el esquema (`gen types` seguido de
   `git diff --exit-code`). Tiene un límite de 15 minutos: un arranque colgado no ocupa el runner
@@ -423,6 +471,21 @@ pasado el CI.
   inicial es de 30 correos por hora (se ajusta en Authentication → Rate Limits); se deja así.
 - Plantillas «Confirma tu cuenta en Agenda» (registro) y «Cambia tu contraseña de Agenda»
   (recuperación), las dos con el enlace `{{ .ConfirmationURL }}`.
+- Google y GitHub, en Authentication → Providers, siguen apagados. Para encenderlos hace falta el
+  client id y el secreto de cada consola. La Redirect URL del proveedor es la de Supabase
+  (`https://zckmejrnscenxwiqykkh.supabase.co/auth/v1/callback`), no la de la aplicación. La app
+  vuelve a `https://jaisato.github.io/agenda-supabase/auth/confirmar`, que ya está en Redirect
+  URLs. Sin esos secretos los botones de la demo fallan con un aviso y el email con contraseña
+  sigue funcionando. En local, Google suele necesitar `skip_nonce_check = true`.
+- CAPTCHA: no activarlo en el proyecto alojado. La demo pública no lleva site key; si el servidor
+  exigiera el token, el registro, el acceso y la recuperación dejarían de funcionar. En local sí
+  está activo, con el secreto de prueba de hCaptcha, y solo a partir del siguiente `supabase start`.
+- El cambio de email ya lo hace GoTrue (`updateUser`), con confirmación en el correo nuevo y en el
+  actual. No hay plantilla propia en el repositorio: vale la de cambio de email del dashboard.
+- El bucket `avatares` lo crea la migración (privado, 1 MB, JPEG, PNG o WebP). No hace falta
+  crearlo en el dashboard. Las URLs que ve el navegador son firmadas.
+- Realtime: la migración añade `contactos`, `contactos_compartidos` e `invitaciones_contacto` a la
+  publicación `supabase_realtime`. En el proyecto alojado esa publicación llega con `db push`.
 
 **Dónde vive cada clave**
 
@@ -436,6 +499,10 @@ pasado el CI.
 - Contraseña SMTP: solo en el dashboard de Supabase. Es una API key de Resend de solo envío y
   limitada al dominio `jasato.com`.
 - Clave secreta de Supabase: solo en el entorno de quien ejecuta `seed:demo`.
+- Site key de hCaptcha: vacía en `environment.ts`. En local, la clave de prueba del editor está en
+  `environment.development.ts` y el secreto de prueba en `supabase/config.toml`. No son secretos.
+- Client id y secreto de Google o GitHub: solo en el dashboard, o en el entorno local si se
+  activan. No están en el repositorio.
 
 Nada de esto va al repositorio. La publishable key viaja en el JS del navegador: lo que protege los
 datos es la RLS, no la clave. La clave secreta se salta la RLS y da acceso a la API de
@@ -502,19 +569,20 @@ unset SUPABASE_SECRET_KEY
   las migraciones y la demo con `seed:demo`; si algún día hubiera datos que importen, habría que
   hacer `npx supabase db dump` a mano. El proyecto se pausa tras una semana sin actividad real; ver
   [`keep-alive.yml`](#operación).
-- **La RPC revela si existe la cuenta.** `compartir_contacto` responde «No hay ningún usuario con
-  ese email» (`PT404`) cuando no hay cuenta con ese email, como hace Google Docs: es una decisión
-  consciente, a cambio de un error útil. Cualquier persona con sesión y un contacto propio puede
-  averiguar así si un email está registrado. El registro (en producción) y la pantalla de
-  recuperación de contraseña no lo revelan.
+- **Quien invita distingue si el email tiene cuenta.** `compartir_contacto` no falla cuando no hay
+  cuenta: guarda una invitación y responde `sin_cuenta`. El propietario ve «tiene cuenta» frente a
+  «sin cuenta todavía», como Google Docs deja ver si el destinatario ya está en el producto. Es una
+  decisión consciente. Cualquier persona con sesión y un contacto propio puede averiguar así si un
+  email está registrado. El registro (en producción) y la pantalla de recuperación de contraseña no
+  lo revelan. Un `PT404` de una base anterior se sigue traduciendo en el cliente.
 - **Compartir pide aceptación, el perfil público no espera.** La fila nace `pendiente` y el
   contacto (teléfono, email, redes) no se ve hasta que el destinatario acepta en `/mis-contactos`.
   Rechazar borra la fila. Desde el momento de la invitación, los dos son contrapartes: cada uno ve
-  el `nombre` público y el email del perfil del otro, porque la lista de invitaciones necesita
-  saber quién invita y la política de `perfiles` no distingue el estado. Es la misma superficie que
-  el aviso anterior: quien invita ya conocía el email, y `nombre` lo elige cada usuario en
-  `/perfil`. `seed:demo` escribe sus dos comparticiones como `aceptada`; la migración hace lo mismo
-  con las filas que ya existían.
+  el `nombre` público, el email y el avatar del perfil del otro, porque la lista de invitaciones
+  necesita saber quién invita y la política de `perfiles` no distingue el estado. Es la misma
+  superficie que el aviso anterior: quien invita ya conocía el email, y `nombre` y el avatar los
+  elige cada usuario en `/perfil`. `seed:demo` escribe sus dos comparticiones como `aceptada`; la
+  migración hace lo mismo con las filas que ya existían.
 - **La cuenta demo es pública.** Cualquiera puede cambiar los datos y la contraseña de
   `demo@jasato.com`; la RLS limita el daño a lo que esa cuenta puede ver y editar. `seed:demo`
   (idempotente) repone la contraseña, los contactos sembrados y las dos comparticiones, pero no
@@ -534,23 +602,27 @@ unset SUPABASE_SECRET_KEY
 - **`seed:demo` solo gestiona usuarios creados por GoTrue**, no insertados a mano por SQL en
   `auth.users`: GoTrue no sabe listar esas filas y `seed:demo` falla con «Database error finding
   users». Los tests pgTAP los insertan a mano, pero dentro de transacciones que se deshacen.
-- **Alcance.** Fuera de la v1: Storage (avatares), Realtime, OAuth, CAPTCHA, cambio de email,
-  invitaciones a personas sin cuenta y pruebas E2E. El registro está abierto.
+- **Alcance.** OAuth (Google y GitHub), CAPTCHA, cambio de email, avatares, Realtime e
+  invitaciones a quien no tiene cuenta están en la aplicación. En el proyecto alojado, OAuth sigue
+  apagado y CAPTCHA no se activa: sin los secretos del dashboard la demo pública no debe dejar de
+  aceptar email y contraseña. La site key de producción va vacía. En local, CAPTCHA usa las claves
+  de prueba de hCaptcha y OAuth está declarado pero `enabled = false`. Fuera de alcance: pruebas
+  E2E en un navegador. El registro está abierto.
 
 ## Estructura del repositorio
 
-| Ruta                    | Contenido                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| `src/app/`              | La aplicación Angular: una carpeta por pantalla y `app.routes.ts`.                     |
-| `src/app/supabase/`     | El cliente de Supabase y `database.types.ts` (generado).                               |
-| `src/app/testing/`      | El doble del cliente de Supabase que usan los specs.                                   |
-| `src/environments/`     | URL y publishable key: `environment.ts` (real) y `environment.development.ts` (local). |
-| `supabase/migrations/`  | Migraciones SQL.                                                                       |
-| `supabase/tests/`       | Tests pgTAP.                                                                           |
-| `supabase/seed.sql`     | Helpers de los tests (`pruebas.*`); solo corre en local y en el CI.                    |
-| `supabase/config.toml`  | Configuración del stack local: puertos y Authentication.                               |
-| `scripts/seed-demo.mjs` | Los datos de la demo (`npm run seed:demo`).                                            |
-| `.github/workflows/`    | `ci.yml`, `deploy.yml` y `keep-alive.yml`.                                             |
+| Ruta                    | Contenido                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `src/app/`              | La aplicación Angular: una carpeta por pantalla y `app.routes.ts`.                    |
+| `src/app/supabase/`     | El cliente de Supabase y `database.types.ts` (generado).                              |
+| `src/app/testing/`      | El doble del cliente de Supabase que usan los specs.                                  |
+| `src/environments/`     | URL, publishable key y site key de hCaptcha. Vacía en producción; de prueba en local. |
+| `supabase/migrations/`  | Migraciones SQL.                                                                      |
+| `supabase/tests/`       | Tests pgTAP.                                                                          |
+| `supabase/seed.sql`     | Helpers de los tests (`pruebas.*`); solo corre en local y en el CI.                   |
+| `supabase/config.toml`  | Configuración del stack local: puertos y Authentication.                              |
+| `scripts/seed-demo.mjs` | Los datos de la demo (`npm run seed:demo`).                                           |
+| `.github/workflows/`    | `ci.yml`, `deploy.yml` y `keep-alive.yml`.                                            |
 
 El diseño y el plan de implementación están en `docs/superpowers/`
 ([diseño](docs/superpowers/specs/2026-10-10-agenda-supabase-design.md),

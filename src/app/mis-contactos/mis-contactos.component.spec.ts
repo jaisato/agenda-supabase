@@ -172,7 +172,7 @@ describe('MisContactosComponent', () => {
       contactoVisibleDePrueba(
         'lector',
         { id: 'c9', propietario_id: 'u9', nombre: 'Ada', apellidos: 'Lovelace' },
-        { nombre: 'Invitado', email: 'invitado@jasato.com' },
+        { nombre: 'Invitado', email: 'invitado@jasato.com', avatar_ruta: null },
       ),
     ]);
     await fixture.whenStable();

@@ -3,6 +3,28 @@
     <h4>Tu perfil</h4>
     <p>{{ email() }}</p>
 
+    <h5>Avatar</h5>
+    @if (urlAvatar(); as url) {
+      <img class="avatar" [src]="url" alt="" referrerpolicy="no-referrer" />
+    }
+    <div>
+      <label for="avatar">Foto (JPEG, PNG o WebP, hasta 1 MB)</label>
+      <input
+        id="avatar"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        [disabled]="guardandoAvatar()"
+        (change)="elegirAvatar($event)"
+      />
+    </div>
+    @if (tieneAvatar()) {
+      <div>
+        <button type="button" [disabled]="guardandoAvatar()" (click)="quitarAvatar()">
+          Quitar avatar
+        </button>
+      </div>
+    }
+
     <form #formNombre="ngForm" (ngSubmit)="guardarNombre(formNombre)" novalidate>
       <div>
         <label for="nombre">Nombre público</label>
@@ -29,6 +51,37 @@
           [disabled]="formNombre.invalid || guardandoNombre()"
         >
           Guardar nombre
+        </button>
+      </div>
+    </form>
+
+    <h5>Cambiar email</h5>
+    <p>El cambio queda pendiente hasta que confirmes el correo nuevo y el actual.</p>
+    <form #formEmail="ngForm" (ngSubmit)="cambiarEmail(formEmail)" novalidate>
+      <div>
+        <label for="email-nuevo">Nuevo email</label>
+        <input
+          class="u-full-width"
+          type="email"
+          id="email-nuevo"
+          name="emailNuevo"
+          autocomplete="email"
+          ngModel
+          #fieldEmail="ngModel"
+          required
+          email
+        />
+        @if (fieldEmail.touched && fieldEmail.invalid) {
+          <div class="msg-error">Escribe un email válido</div>
+        }
+      </div>
+      <div>
+        <button
+          type="submit"
+          class="button-primary u-full-width"
+          [disabled]="formEmail.invalid || guardandoEmail()"
+        >
+          Cambiar email
         </button>
       </div>
     </form>

@@ -101,6 +101,12 @@ describe('MensajesService', () => {
       );
     });
 
+    it('captcha_failed se traduce', () => {
+      expect(service.deError({ code: 'captcha_failed', message: 'captcha protection' })).toBe(
+        'No se ha podido comprobar que eres una persona. Inténtalo de nuevo',
+      );
+    });
+
     it('over_email_send_rate_limit se traduce', () => {
       expect(
         service.deError({

@@ -5,9 +5,9 @@ import { MensajesService } from '../../mensajes.service';
 import { AuthService } from '../auth.service';
 
 /**
- * Destino del enlace del correo de confirmación (`/auth/confirmar?code=…`, flujo PKCE): canjea el
- * `code` por la sesión. Sin `code`, o con uno caducado o ya usado, no hay pantalla en blanco:
- * avisa y ofrece volver a «Entrar».
+ * Destino del enlace del correo y de OAuth (`/auth/confirmar?code=…`, flujo PKCE): canjea el
+ * `code` por la sesión. También aterriza aquí el cambio de email. Sin `code`, o con uno caducado
+ * o ya usado, no hay pantalla en blanco: avisa y ofrece volver a «Entrar».
  */
 @Component({
   imports: [RouterLink],
@@ -36,7 +36,7 @@ export class ConfirmarComponent implements OnInit {
       this.fallido.set(true);
       return;
     }
-    this.mensajes.exito('Cuenta confirmada');
+    this.mensajes.exito('Sesión iniciada');
     // replaceUrl: «Atrás» no debe volver a esta URL, cuyo code ya está gastado.
     await this.router.navigate(['/mis-contactos'], { replaceUrl: true });
   }

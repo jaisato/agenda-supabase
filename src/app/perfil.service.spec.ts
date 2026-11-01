@@ -35,7 +35,7 @@ describe('PerfilService', () => {
     expect(falso.consultas[0]).toEqual({
       tabla: 'perfiles',
       cadena: [
-        { metodo: 'select', args: ['id, email, nombre, creado_en'] },
+        { metodo: 'select', args: ['id, email, nombre, avatar_ruta, creado_en'] },
         { metodo: 'eq', args: ['id', 'u1'] },
         { metodo: 'single', args: [] },
       ],

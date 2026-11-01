@@ -1,5 +1,6 @@
-import { Component, input, output } from '@angular/core';
+import { Component, effect, inject, input, output, signal } from '@angular/core';
 
+import { AvatarService } from '../avatar.service';
 import { ContactoVisible } from '../contacto';
 
 @Component({
@@ -11,7 +12,29 @@ import { ContactoVisible } from '../contacto';
   preserveWhitespaces: true,
 })
 export class DetallesContactoComponent {
+  private readonly avatares = inject(AvatarService);
+
   readonly contacto = input<ContactoVisible | null>(null);
+  protected readonly urlPropietario = signal<string | null>(null);
+
+  constructor() {
+    effect((onCleanup) => {
+      const ruta = this.contacto()?.propietario.avatar_ruta ?? null;
+      if (!ruta) {
+        this.urlPropietario.set(null);
+        return;
+      }
+      let vigente = true;
+      onCleanup(() => {
+        vigente = false;
+      });
+      void this.avatares.urlDe(ruta).then((url) => {
+        if (vigente) {
+          this.urlPropietario.set(url);
+        }
+      });
+    });
+  }
 
   protected linea(contacto: ContactoVisible): string {
     return [contacto.telefono, contacto.email].filter((parte) => parte.trim()).join(' | ');

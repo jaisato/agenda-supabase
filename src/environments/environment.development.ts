@@ -3,4 +3,7 @@
 export const environment = {
   supabaseUrl: 'http://127.0.0.1:54321',
   supabasePublishableKey: 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH',
+  // Clave de sitio de pruebas de hCaptcha: el widget siempre pasa. El secreto gemelo está en
+  // config.toml y solo vale tras el siguiente `supabase start`.
+  captchaSiteKey: '10000000-ffff-ffff-ffff-000000000001',
 };

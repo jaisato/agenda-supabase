@@ -64,6 +64,22 @@ describe('EntrarComponent', () => {
     expect(enlace('¿Olvidaste la contraseña?')?.getAttribute('href')).toBe('/auth/recuperar');
   });
 
+  it('entrar con Google pide el proveedor y no envía la contraseña', async () => {
+    const google = Array.from(elemento.querySelectorAll('button')).find((boton) =>
+      boton.textContent?.includes('Google'),
+    )!;
+
+    google.click();
+    await reposar();
+
+    expect(falso.auth.signInWithOAuth).toHaveBeenCalledExactlyOnceWith({
+      provider: 'google',
+      options: { redirectTo: expect.stringMatching(/\/auth\/confirmar$/) },
+    });
+    expect(falso.auth.signInWithPassword).not.toHaveBeenCalled();
+    expect(document.querySelector('script[src*="hcaptcha"]')).toBeNull();
+  });
+
   it('deshabilita «Entrar» hasta que hay email y contraseña', async () => {
     expect(entrar().disabled).toBe(true);
 

@@ -62,6 +62,8 @@ export class MensajesService {
         return 'La contraseña debe tener al menos 8 caracteres';
       case 'over_email_send_rate_limit':
         return 'Demasiados correos en poco tiempo; espera un momento';
+      case 'captcha_failed':
+        return 'No se ha podido comprobar que eres una persona. Inténtalo de nuevo';
       default:
         return `Algo ha fallado: ${error.message}`;
     }

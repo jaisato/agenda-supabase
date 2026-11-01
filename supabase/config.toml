@@ -211,11 +211,13 @@ token_verifications = 30
 # Number of Web3 logins that can be made in a 5 minute interval per IP address.
 web3 = 30
 
-# Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
-# [auth.captcha]
-# enabled = true
-# provider = "hcaptcha"
-# secret = ""
+# hCaptcha publisher test keys (always pass). Safe to commit. This block applies on the next
+# `supabase start`; it does not touch a stack that is already running. Do not enable captcha on
+# the hosted project: the public demo ships without a site key and would stop accepting sign-ups.
+[auth.captcha]
+enabled = true
+provider = "hcaptcha"
+secret = "0x0000000000000000000000000000000000000000"
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
@@ -333,6 +335,26 @@ url = ""
 # If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+email_optional = false
+
+# Google and GitHub stay off until a client id and secret exist. Enabling them with an empty
+# secret breaks the next `supabase start`. Local Google usually also needs skip_nonce_check = true.
+[auth.external.google]
+enabled = false
+client_id = ""
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
+email_optional = false
+
+[auth.external.github]
+enabled = false
+client_id = ""
+secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
 email_optional = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.

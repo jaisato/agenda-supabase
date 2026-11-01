@@ -11,7 +11,12 @@
         <a routerLink="/perfil" routerLinkActive="seleccionada">Perfil</a>
       </li>
       <li class="sesion">
-        <span class="email">{{ nombreVisible() }}</span>
+        <span class="email">
+          @if (urlAvatar(); as url) {
+            <img class="avatar" [src]="url" alt="" referrerpolicy="no-referrer" />
+          }
+          {{ nombreVisible() }}
+        </span>
         <button type="button" (click)="salir()">Salir</button>
       </li>
     } @else {

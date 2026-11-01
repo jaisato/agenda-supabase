@@ -5,7 +5,12 @@
     @if (
       contacto.rol !== 'propietario' && (contacto.propietario.nombre || contacto.propietario.email)
     ) {
-      <p>Compartido por {{ contacto.propietario.nombre || contacto.propietario.email }}</p>
+      <p class="compartido">
+        @if (urlPropietario(); as url) {
+          <img class="avatar" [src]="url" alt="" referrerpolicy="no-referrer" />
+        }
+        Compartido por {{ contacto.propietario.nombre || contacto.propietario.email }}
+      </p>
     }
     <hr />
     <!-- Botones para ver perfiles en redes sociales. Sin usuario no hay a dónde ir. -->

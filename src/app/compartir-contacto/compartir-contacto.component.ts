@@ -1,11 +1,12 @@
-import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 
-import { Comparticion, ContactoVisible, Rol } from '../contacto';
+import { Comparticion, ContactoVisible, InvitacionPorEmail, Rol } from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { MensajesService } from '../mensajes.service';
+import { TiempoRealService } from '../tiempo-real.service';
 
 @Component({
   imports: [FormsModule, RouterLink],
@@ -16,6 +17,7 @@ export class CompartirContactoComponent implements OnInit {
   private readonly _router = inject(Router);
   private readonly _contactosService = inject(ContactosService);
   private readonly _mensajes = inject(MensajesService);
+  private readonly tiempoReal = inject(TiempoRealService);
 
   // Dato del resolver de la ruta (contactoResolver), que withComponentInputBinding() entrega como
   // input. Es null si el contacto no existe o la persona no puede verlo (por ejemplo, porque su
@@ -33,9 +35,20 @@ export class CompartirContactoComponent implements OnInit {
   // Las personas con acceso. Sin zone.js, lo que se asigna tras un await no se repinta salvo que
   // sea un signal. `cargada` distingue «aún no ha llegado» de «no hay nadie».
   protected readonly comparticiones = signal<Comparticion[]>([]);
+  protected readonly invitaciones = signal<InvitacionPorEmail[]>([]);
   protected readonly cargada = signal(false);
   // Mientras espera la respuesta no se puede volver a enviar el formulario.
   protected readonly enviando = signal(false);
+
+  constructor() {
+    // revision 0 es el arranque: la carga la hace ngOnInit. Un aviso posterior vuelve a pedirlas.
+    effect(() => {
+      if (this.tiempoReal.revision() === 0 || !this.propio()) {
+        return;
+      }
+      void this.cargar();
+    });
+  }
 
   // Una sola vez al abrir la pantalla.
   async ngOnInit(): Promise<void> {
@@ -58,10 +71,12 @@ export class CompartirContactoComponent implements OnInit {
     this.enviando.set(true);
     try {
       const comparticion = await this._contactosService.compartir(this.propio()!.id, email, rol);
-      const texto =
-        comparticion.estado === 'pendiente'
-          ? `Invitación enviada a ${email} como ${rol}`
-          : `${email} ahora es ${rol}`;
+      const destino = comparticion.email;
+      const texto = comparticion.sin_cuenta
+        ? `Invitación guardada para ${destino}. Cuando cree su cuenta, podrá aceptarla.`
+        : comparticion.estado === 'pendiente'
+          ? `Invitación enviada a ${destino} como ${rol}`
+          : `${destino} ahora es ${rol}`;
       this._mensajes.exito(texto);
     } catch (error) {
       this.avisarDe(error);
@@ -106,13 +121,30 @@ export class CompartirContactoComponent implements OnInit {
     );
   }
 
-  // Pide la lista de personas con acceso. Si falla, avisa y deja la que hubiera.
-  private async cargar(): Promise<void> {
+  async revocarInvitacion(invitacion: InvitacionPorEmail): Promise<void> {
+    this._mensajes.limpiar();
     try {
-      const lista = await this._contactosService.listarComparticiones(this.propio()!.id);
+      await this._contactosService.revocarInvitacion(this.propio()!.id, invitacion.email);
+    } catch (error) {
+      this.avisarDe(error);
+      return;
+    }
+    this.invitaciones.update((lista) => lista.filter((i) => i.email !== invitacion.email));
+  }
+
+  // Pide las dos listas. Si falla, avisa y deja las que hubiera.
+  private async cargar(): Promise<void> {
+    const contacto = this.propio();
+    if (!contacto) {
+      return;
+    }
+    try {
+      const lista = await this._contactosService.listarComparticiones(contacto.id);
+      const porEmail = await this._contactosService.listarInvitacionesEmail(contacto.id);
       // PostgREST no garantiza el orden: por email, para que la lista no se reordene al volver a
       // compartir con alguien (que actualiza su fila).
-      this.comparticiones.set([...lista].sort((a, b) => a.email.localeCompare(b.email)));
+      this.comparticiones.set([...lista].sort((a, b) => a.email.localeCompare(b.email, 'es')));
+      this.invitaciones.set([...porEmail].sort((a, b) => a.email.localeCompare(b.email, 'es')));
     } catch (error) {
       this.avisarDe(error);
       return;

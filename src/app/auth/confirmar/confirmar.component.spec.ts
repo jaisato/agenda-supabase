@@ -74,7 +74,7 @@ describe('ConfirmarComponent', () => {
   });
 
   describe('con code', () => {
-    it('lo canjea, avisa «Cuenta confirmada» y navega a /mis-contactos sustituyendo en el historial la URL con el code', async () => {
+    it('lo canjea, avisa «Sesión iniciada» y navega a /mis-contactos sustituyendo en el historial la URL con el code', async () => {
       falso.auth.exchangeCodeForSession.mockResolvedValue({
         data: { session: ana, user: ana.user },
         error: null,
@@ -83,7 +83,7 @@ describe('ConfirmarComponent', () => {
       await abrir('codigo-pkce');
 
       expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledExactlyOnceWith('codigo-pkce');
-      expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Cuenta confirmada' });
+      expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Sesión iniciada' });
       // replaceUrl: «Atrás» no debe volver a una URL cuyo code ya está gastado.
       expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], { replaceUrl: true });
     });
@@ -110,7 +110,7 @@ describe('ConfirmarComponent', () => {
       expect(texto()).not.toContain('Confirmando tu cuenta');
       expect(enlaceEntrar()?.getAttribute('href')).toBe('/entrar');
       expect(navegar).not.toHaveBeenCalled();
-      // El aviso es el propio texto de la página: ni «Cuenta confirmada» ni un error técnico aparte.
+      // El aviso es el propio texto de la página: ni «Sesión iniciada» ni un error técnico aparte.
       expect(mensajes.mensaje()).toBeNull();
     });
 

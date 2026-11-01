@@ -3,7 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 import { MockInstance } from 'vitest';
 
-import { Comparticion, ContactoVisible, Rol } from '../contacto';
+import { Comparticion, ContactoVisible, ResultadoCompartir, Rol } from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { MensajesService } from '../mensajes.service';
 import { SUPABASE } from '../supabase/supabase.client';
@@ -148,6 +148,14 @@ describe('CompartirContactoComponent', () => {
             { metodo: 'eq', args: ['contacto_id', 'c1'] },
           ],
         },
+        {
+          tabla: 'invitaciones_contacto',
+          cadena: [
+            { metodo: 'select', args: ['email, rol'] },
+            { metodo: 'eq', args: ['contacto_id', 'c1'] },
+            { metodo: 'order', args: ['email'] },
+          ],
+        },
       ]);
       expect(emails()).toEqual(['b@x.es', 'c@x.es']);
       expect(roles()).toEqual(['lector', 'editor']);
@@ -285,6 +293,50 @@ describe('CompartirContactoComponent', () => {
         expect(navegar).not.toHaveBeenCalled();
       });
 
+      it('si el email no tiene cuenta, el aviso habla de la invitación y usa el email normalizado', async () => {
+        falso.respuestaRpc('compartir_contacto', {
+          data: {
+            usuario_id: null,
+            rol: 'lector',
+            estado: 'pendiente',
+            email: 'nadie@test.local',
+            sin_cuenta: true,
+          },
+          error: null,
+        });
+        await abrir(propio);
+        await escribir('  Nadie@Test.LOCAL ');
+
+        await enviar();
+
+        expect(mensajes.mensaje()).toEqual({
+          tipo: 'exito',
+          texto:
+            'Invitación guardada para nadie@test.local. Cuando cree su cuenta, podrá aceptarla.',
+        });
+      });
+
+      it('lista los emails sin cuenta y revocar quita esa invitación', async () => {
+        falso.respuestaDe('invitaciones_contacto', {
+          data: [{ email: 'nadie@test.local', rol: 'lector' }],
+          error: null,
+        });
+        await abrir(propio);
+
+        const tabla = elemento.querySelector('#invitaciones');
+        expect(tabla?.textContent).toContain('nadie@test.local');
+        expect(elemento.textContent).toContain('Sin cuenta todavía');
+
+        tabla?.querySelector('button')?.click();
+        await reposar();
+
+        expect(elemento.querySelector('#invitaciones')).toBeNull();
+        expect(
+          falso.consultas.filter((consulta) => consulta.tabla === 'invitaciones_contacto').at(-1)
+            ?.cadena[0],
+        ).toEqual({ metodo: 'delete', args: [] });
+      });
+
       it('si esa persona ya había aceptado, el aviso dice el rol nuevo', async () => {
         falso.respuestaRpc('compartir_contacto', {
           data: compartidoCon('u2', 'editor', 'aceptada'),
@@ -343,9 +395,9 @@ describe('CompartirContactoComponent', () => {
         await escribir('b@x.es');
         await enviar();
         expect(mensajes.mensaje()?.tipo).toBe('error');
-        let terminarComparticion!: (comparticion: Comparticion) => void;
+        let terminarComparticion!: (comparticion: ResultadoCompartir) => void;
         vi.spyOn(TestBed.inject(ContactosService), 'compartir').mockReturnValue(
-          new Promise<Comparticion>((resolver) => (terminarComparticion = resolver)),
+          new Promise<ResultadoCompartir>((resolver) => (terminarComparticion = resolver)),
         );
 
         await enviar();
@@ -355,6 +407,7 @@ describe('CompartirContactoComponent', () => {
           rol: 'lector',
           email: 'b@x.es',
           estado: 'pendiente',
+          sin_cuenta: false,
         });
         await reposar();
 
@@ -368,7 +421,9 @@ describe('CompartirContactoComponent', () => {
         let fallar!: (error: PostgrestError) => void;
         const compartir = vi
           .spyOn(TestBed.inject(ContactosService), 'compartir')
-          .mockReturnValue(new Promise<Comparticion>((_resolver, rechazar) => (fallar = rechazar)));
+          .mockReturnValue(
+            new Promise<ResultadoCompartir>((_resolver, rechazar) => (fallar = rechazar)),
+          );
         await abrir(propio);
         await escribir('b@x.es');
 

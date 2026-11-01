@@ -16,7 +16,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(47);
+select plan(67);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -140,17 +140,26 @@ select throws_ok(
   '42501', 'permission denied for table contactos_compartidos',
   'un editor no puede insertar comparticiones a mano');
 
--- La RPC rechaza compartir con uno mismo (22023) y con un email sin cuenta (PT404: el código con el
--- que PostgREST responde 404, en vez de P0002, que daría un 500).
+-- La RPC rechaza compartir con uno mismo (22023). Un email sin cuenta no falla: queda una invitación
+-- en invitaciones_contacto y no una fila de contactos_compartidos. Quien invita ve la diferencia
+-- (sin_cuenta); es la misma superficie que el antiguo PT404, ahora como fila y no como error.
 select pruebas.autenticar('a@test.local');
 select throws_ok(
   $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, 'a@test.local', 'lector')$$,
   '22023', 'No puedes compartir un contacto contigo mismo',
   'A no puede compartir un contacto consigo mismo');
-select throws_ok(
-  $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, 'nadie@test.local', 'lector')$$,
-  'PT404', 'No hay ningún usuario con ese email',
-  'compartir con un email sin cuenta falla');
+select results_eq(
+  $$select usuario_id::text, rol::text, estado::text, email, sin_cuenta
+    from public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, '  Nadie@Test.LOCAL ', 'editor')$$,
+  $$values (null::text, 'editor', 'pendiente', 'nadie@test.local', true)$$,
+  'compartir con un email sin cuenta guarda una invitación');
+select results_eq(
+  $$select email, rol::text from public.invitaciones_contacto$$,
+  $$values ('nadie@test.local', 'editor')$$,
+  'la invitación por email queda en invitaciones_contacto, normalizada');
+select results_eq($$select count(*)::int from public.contactos_compartidos$$, array[1],
+  'esa invitación no crea una compartición');
 
 -- La RPC normaliza el email y hace upsert del rol, sin tocar el estado: volver a compartir con B
 -- lo baja a lector y la compartición sigue aceptada.
@@ -230,6 +239,84 @@ select results_eq(
 select pruebas.autenticar('b@test.local');
 select results_eq($$select count(*)::int from public.contactos$$, array[0],
   'tras la revocación, B no ve el contacto');
+
+-- La invitación que se guardó arriba sigue ahí. Volver a invitar cambia el rol y no duplica la fila.
+-- Un tercero no la ve, no la borra y no puede insertarla: no hay privilegio de insert.
+select pruebas.autenticar('a@test.local');
+select results_eq(
+  $$select rol::text, sin_cuenta from public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'nadie@test.local', 'lector')$$,
+  $$values ('lector', true)$$,
+  'volver a invitar el mismo email cambia el rol y sigue sin cuenta');
+select results_eq($$select count(*)::int from public.invitaciones_contacto$$, array[1],
+  'volver a invitar no duplica la invitación por email');
+select throws_ok(
+  $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, '   ', 'lector')$$,
+  '22023', 'Escribe un email válido',
+  'un email vacío no se invita');
+select pruebas.autenticar('c@test.local');
+select is_empty($$select * from public.invitaciones_contacto$$,
+  'un tercero no ve las invitaciones por email');
+select results_eq(
+  $$with d as (delete from public.invitaciones_contacto returning 1) select count(*)::int from d$$,
+  array[0], 'un tercero no revoca una invitación por email');
+select throws_ok(
+  $$insert into public.invitaciones_contacto (contacto_id, email, rol)
+    values (current_setting('prueba.c1')::uuid, 'otro@test.local', 'lector')$$,
+  '42501', 'permission denied for table invitaciones_contacto',
+  'nadie inserta invitaciones por email a mano');
+
+-- El propietario sí revoca. Al recrear la cuenta, la invitación se convierte en compartición
+-- pendiente y el contacto sigue oculto hasta que se acepta. Volver a compartir entonces ya no dice
+-- que no hay cuenta, y no devuelve a pendiente una fila que siguiera pendiente.
+select pruebas.autenticar('a@test.local');
+select results_eq(
+  $$with d as (delete from public.invitaciones_contacto where email = 'nadie@test.local' returning 1)
+    select count(*)::int from d$$,
+  array[1], 'el propietario revoca la invitación por email');
+select results_eq(
+  $$select sin_cuenta from public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'nadie@test.local', 'lector')$$,
+  array[true], 'A vuelve a dejar la invitación para cuando exista la cuenta');
+select lives_ok($$select pruebas.crear_usuario('nadie@test.local')$$,
+  'se crea la cuenta del email invitado');
+select is_empty($$select * from public.invitaciones_contacto$$,
+  'al crear la cuenta, la invitación por email desaparece');
+select pruebas.autenticar('nadie@test.local');
+select results_eq(
+  $$select rol::text, estado::text from public.contactos_compartidos$$,
+  $$values ('lector', 'pendiente')$$,
+  'la cuenta nueva recibe la compartición pendiente, con el rol de la invitación');
+select results_eq($$select count(*)::int from public.contactos$$, array[0],
+  'quien acaba de crear la cuenta no ve el contacto hasta aceptar');
+select results_eq(
+  $$select nombre from public.invitaciones_pendientes()$$,
+  array['Editado'],
+  'la invitación canjeada sale en invitaciones_pendientes, solo con el nombre');
+select pruebas.autenticar('a@test.local');
+select results_eq(
+  $$select estado::text, rol::text, sin_cuenta from public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'nadie@test.local', 'editor')$$,
+  $$values ('pendiente', 'editor', false)$$,
+  'volver a compartir con la cuenta ya creada no la acepta ni dice que no tiene cuenta');
+
+-- Si el dueño cambia su email al de una invitación propia, esa invitación se tira y no nace una
+-- compartición consigo mismo.
+select lives_ok(
+  $$select public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'futuro@test.local', 'lector')$$,
+  'A invita a un email que luego será el suyo');
+reset role;
+select lives_ok(
+  $$update auth.users set email = 'futuro@test.local'
+    where id = pruebas.id_usuario('a@test.local')$$,
+  'A cambia su email de auth.users al de esa invitación');
+select is_empty($$select * from public.invitaciones_contacto where email = 'futuro@test.local'$$,
+  'la invitación al propio email nuevo desaparece');
+select results_eq(
+  $$select count(*)::int from public.contactos_compartidos
+    where usuario_id = pruebas.id_usuario('futuro@test.local')$$,
+  array[0], 'el cambio de email no le comparte a A su propio contacto');
 
 -- Un visitante sin sesión no puede ejecutar la RPC ni listar invitaciones. También daría 42501 si
 -- la función llegara a ejecutarse, así que se comprueba el mensaje: es el del privilegio de

@@ -26,12 +26,21 @@ export interface SupabaseFalso {
     readonly resetPasswordForEmail: Mock;
     readonly updateUser: Mock;
     readonly exchangeCodeForSession: Mock;
+    readonly signInWithOAuth: Mock;
     readonly onAuthStateChange: Mock;
+  };
+  /** Los mocks de `storage.from('avatares')`. Todas las llamadas comparten estos. */
+  readonly storage: {
+    readonly upload: Mock;
+    readonly remove: Mock;
+    readonly createSignedUrl: Mock;
   };
   /** Una entrada por cada `from()`, en el orden en que se crean. Las llamadas a `rpc` no entran. */
   readonly consultas: ConsultaFalsa[];
   /** Simula un evento de `onAuthStateChange` (avisa a todos los suscriptores). */
   emitirAuth(evento: AuthChangeEvent, sesion: Session | null): void;
+  /** Dispara los callbacks de `postgres_changes` registrados en los canales. */
+  emitirTiempoReal(): void;
   /** Respuesta de las consultas a `from(tabla)`; sin configurar, `{ data: null, error: null }`. */
   respuestaDe(tabla: string, respuesta: RespuestaFalsa): void;
   /** Respuesta de `rpc(nombre, …)`; sin configurar, `{ data: null, error: null }`. */
@@ -84,6 +93,7 @@ export function crearSupabaseFalso(): SupabaseFalso {
       data: { user: null, session: null },
       error: null,
     })),
+    signInWithOAuth: vi.fn(async () => ({ data: { provider: 'google', url: null }, error: null })),
     onAuthStateChange: vi.fn((callback: CallbackAuth) => {
       suscriptores.add(callback);
       const unsubscribe = vi.fn(() => {
@@ -129,9 +139,44 @@ export function crearSupabaseFalso(): SupabaseFalso {
     async (nombre: string, _args?: unknown) => respuestasDeRpc.get(nombre) ?? sinRespuesta(),
   );
 
+  const upload = vi.fn(async () => ({ data: { path: '' }, error: null }));
+  const remove = vi.fn(async () => ({ data: [], error: null }));
+  const createSignedUrl = vi.fn(async (ruta: string) => ({
+    data: { signedUrl: `https://firmada.local/${ruta}` },
+    error: null,
+  }));
+  const storage = {
+    from: vi.fn(() => ({ upload, remove, createSignedUrl })),
+  };
+
+  const callbacksTiempoReal: Array<() => void> = [];
+  const channel = vi.fn((nombre: string) => {
+    const canal = {
+      on: vi.fn((...args: unknown[]) => {
+        const callback = args.at(-1);
+        if (typeof callback === 'function') {
+          callbacksTiempoReal.push(callback as () => void);
+        }
+        return canal;
+      }),
+      subscribe: vi.fn(() => canal),
+      nombre,
+    };
+    return canal;
+  });
+  const removeChannel = vi.fn(async () => 'ok');
+
   return {
-    cliente: { auth, from, rpc } as unknown as SupabaseClient<Database>,
+    cliente: {
+      auth,
+      from,
+      rpc,
+      storage,
+      channel,
+      removeChannel,
+    } as unknown as SupabaseClient<Database>,
     auth,
+    storage: { upload, remove, createSignedUrl },
     consultas,
     emitirAuth: (evento, sesion) => {
       if (suscriptores.size === 0) {
@@ -148,6 +193,11 @@ export function crearSupabaseFalso(): SupabaseFalso {
     },
     respuestaRpc: (nombre, respuesta) => {
       respuestasDeRpc.set(nombre, respuesta);
+    },
+    emitirTiempoReal: () => {
+      for (const callback of [...callbacksTiempoReal]) {
+        callback();
+      }
     },
   };
 }

@@ -44,13 +44,35 @@
           }
         </div>
 
+        <app-captcha />
+
         <div>
           <button
             type="submit"
             class="button-primary u-full-width"
-            [disabled]="form.invalid || enviando()"
+            [disabled]="form.invalid || enviando() || captchaBloquea()"
           >
             Crear cuenta
+          </button>
+        </div>
+        <div>
+          <button
+            type="button"
+            class="u-full-width"
+            (click)="entrarCon('google')"
+            [disabled]="enviando()"
+          >
+            Entrar con Google
+          </button>
+        </div>
+        <div>
+          <button
+            type="button"
+            class="u-full-width"
+            (click)="entrarCon('github')"
+            [disabled]="enviando()"
+          >
+            Entrar con GitHub
           </button>
         </div>
       </form>

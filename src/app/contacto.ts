@@ -22,6 +22,8 @@ export type RolVisible = 'propietario' | Rol;
 export interface PropietarioVisible {
   nombre: string | null;
   email: string;
+  /** Ruta en el bucket privado `avatares`, o null si no ha subido foto. */
+  avatar_ruta: string | null;
 }
 
 /** Un contacto tal como lo ve la persona con la sesión abierta. */
@@ -36,6 +38,21 @@ export interface Comparticion {
   rol: Rol;
   email: string;
   estado: EstadoComparticion;
+}
+
+/** Lo que devuelve `compartir_contacto`: una compartición o una invitación a quien no tiene cuenta. */
+export interface ResultadoCompartir {
+  usuario_id: string | null;
+  rol: Rol;
+  estado: EstadoComparticion;
+  email: string;
+  sin_cuenta: boolean;
+}
+
+/** Email guardado porque todavía no hay cuenta con la que compartir. */
+export interface InvitacionPorEmail {
+  email: string;
+  rol: Rol;
 }
 
 /** Invitación que el destinatario aún no ha aceptado. No incluye el contacto entero. */

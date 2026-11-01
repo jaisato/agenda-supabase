@@ -24,7 +24,7 @@ export function contactoDePrueba(campos: Partial<Contacto> = {}): Contacto {
 export function contactoVisibleDePrueba(
   rol: RolVisible,
   campos: Partial<Contacto> = {},
-  propietario: PropietarioVisible = { nombre: null, email: '' },
+  propietario: PropietarioVisible = { nombre: null, email: '', avatar_ruta: null },
 ): ContactoVisible {
   return { ...contactoDePrueba(campos), rol, propietario };
 }
