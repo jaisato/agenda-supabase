@@ -3,7 +3,8 @@ import { AfterViewInit, Component, ElementRef, signal, viewChild } from '@angula
 import { environment } from '../../environments/environment';
 
 interface HCaptchaApi {
-  render(elemento: HTMLElement, opciones: Record<string, unknown>): unknown;
+  render(elemento: HTMLElement, opciones: Record<string, unknown>): string;
+  reset(widgetId?: string): void;
 }
 
 let carga: Promise<void> | null = null;
@@ -38,6 +39,8 @@ function cargarHcaptcha(): Promise<void> {
 })
 export class CaptchaComponent implements AfterViewInit {
   private readonly contenedor = viewChild<ElementRef<HTMLElement>>('contenedor');
+  // Lo que devuelve render(): hace falta para reiniciar el widget tras cada envío.
+  private widgetId: string | undefined;
 
   readonly token = signal('');
   protected readonly fallo = signal(false);
@@ -59,6 +62,23 @@ export class CaptchaComponent implements AfterViewInit {
     return this.token() || undefined;
   }
 
+  /**
+   * Un token solo vale para una petición a Auth: tras cada envío, acertado o no, el widget vuelve
+   * a pedir la comprobación. Sin clave de sitio no hay widget y solo se vacía el token.
+   */
+  reiniciar(): void {
+    this.token.set('');
+    const api = (window as Window & { hcaptcha?: HCaptchaApi }).hcaptcha;
+    if (!api || this.widgetId === undefined) {
+      return;
+    }
+    try {
+      api.reset(this.widgetId);
+    } catch {
+      // El widget ya no está en la página (el formulario se ha ocultado): no hay nada que reiniciar.
+    }
+  }
+
   private async montar(): Promise<void> {
     try {
       await cargarHcaptcha();
@@ -68,7 +88,7 @@ export class CaptchaComponent implements AfterViewInit {
         this.fallo.set(true);
         return;
       }
-      api.render(elemento, {
+      this.widgetId = api.render(elemento, {
         sitekey: environment.captchaSiteKey,
         callback: (token: string) => this.token.set(token),
         'expired-callback': () => this.token.set(''),

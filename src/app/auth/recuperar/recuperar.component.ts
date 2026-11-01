@@ -41,6 +41,8 @@ export class RecuperarComponent {
       this.mensajes.error(this.mensajes.deError(error as AuthError));
     } finally {
       this.enviando.set(false);
+      // El token de hCaptcha es de un solo uso: sin esto, el siguiente intento fallaría.
+      this.captcha()?.reiniciar();
     }
   }
 }

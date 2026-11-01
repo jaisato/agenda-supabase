@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 
 import { SUPABASE } from '../supabase/supabase.client';
+import { ProveedorOAuth } from './oauth-proveedores';
 
 /**
  * Sesión de la persona usuaria sobre Supabase Auth. Las operaciones lanzan el `error` de Supabase
@@ -51,8 +52,13 @@ export class AuthService {
     this.sesion.set(data.session);
   }
 
-  /** Google o GitHub. La vuelta es la misma ruta PKCE que el enlace del correo. */
-  async entrarCon(proveedor: 'google' | 'github'): Promise<void> {
+  /**
+   * Google o GitHub. La vuelta es la misma ruta PKCE que el enlace del correo. No hay petición
+   * previa: supabase-js redirige el navegador a /auth/v1/authorize, y si el proveedor está apagado
+   * en el proyecto es GoTrue quien responde, con un JSON de error. Por eso los botones solo se
+   * pintan para los proveedores de `OAUTH_PROVEEDORES`.
+   */
+  async entrarCon(proveedor: ProveedorOAuth): Promise<void> {
     const { error } = await this.supabase.auth.signInWithOAuth({
       provider: proveedor,
       options: { redirectTo: this.urlDe('auth/confirmar') },

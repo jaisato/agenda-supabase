@@ -6,4 +6,7 @@ export const environment = {
   // Clave de sitio de pruebas de hCaptcha: el widget siempre pasa. El secreto gemelo está en
   // config.toml y solo vale tras el siguiente `supabase start`.
   captchaSiteKey: '10000000-ffff-ffff-ffff-000000000001',
+  // En config.toml Google y GitHub están con enabled = false: sin sus credenciales locales, los
+  // botones no se pintan. Al activarlos allí, añadir aquí 'google' o 'github'.
+  oauthProveedores: [] as Array<'google' | 'github'>,
 };

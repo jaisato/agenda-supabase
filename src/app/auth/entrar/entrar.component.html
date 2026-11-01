@@ -49,26 +49,19 @@
           Entrar
         </button>
       </div>
-      <div>
-        <button
-          type="button"
-          class="u-full-width"
-          (click)="entrarCon('google')"
-          [disabled]="enviando()"
-        >
-          Entrar con Google
-        </button>
-      </div>
-      <div>
-        <button
-          type="button"
-          class="u-full-width"
-          (click)="entrarCon('github')"
-          [disabled]="enviando()"
-        >
-          Entrar con GitHub
-        </button>
-      </div>
+      <!-- Solo los proveedores de environment.oauthProveedores: ninguno en la demo publicada -->
+      @for (proveedor of proveedores; track proveedor) {
+        <div>
+          <button
+            type="button"
+            class="u-full-width"
+            (click)="entrarCon(proveedor)"
+            [disabled]="enviando()"
+          >
+            Entrar con {{ nombreDe(proveedor) }}
+          </button>
+        </div>
+      }
     </form>
 
     <p class="enlaces">

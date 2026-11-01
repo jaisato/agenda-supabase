@@ -6,4 +6,8 @@ export const environment = {
   // Vacío a propósito: sin clave no se pinta el captcha ni se carga el script. Activarlo en el
   // proyecto publicado sin esta clave rompería la demo.
   captchaSiteKey: '',
+  // Vacío hasta que Google o GitHub tengan client id y secreto en el dashboard: con un proveedor
+  // apagado, signInWithOAuth no devuelve error, redirige a un JSON de error de GoTrue. Al
+  // activarlos, añadir aquí 'google' o 'github' y los botones aparecen.
+  oauthProveedores: [] as Array<'google' | 'github'>,
 };

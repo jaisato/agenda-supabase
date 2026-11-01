@@ -5,6 +5,7 @@ import { AuthApiError, AuthWeakPasswordError } from '@supabase/supabase-js';
 import { MensajesService } from '../../mensajes.service';
 import { SUPABASE } from '../../supabase/supabase.client';
 import { SupabaseFalso, crearSupabaseFalso } from '../../testing/supabase-falso';
+import { OAUTH_PROVEEDORES } from '../oauth-proveedores';
 import { RegistroComponent } from './registro.component';
 
 const revisaTuCorreo =
@@ -60,6 +61,13 @@ describe('RegistroComponent', () => {
     await escribir('ana@test.es', 'secreto123');
 
     expect(crearCuenta().disabled).toBe(false);
+  });
+
+  // environment.ts (el de los specs y la demo publicada) no lista ningún proveedor OAuth.
+  it('sin proveedores OAuth configurados no ofrece Google ni GitHub', () => {
+    expect(
+      Array.from(elemento.querySelectorAll('button')).map((boton) => boton.textContent?.trim()),
+    ).toEqual(['Crear cuenta']);
   });
 
   it('al enviar llama a registrar con el email y la contraseña, y en lugar del formulario pide revisar el correo', async () => {
@@ -154,5 +162,44 @@ describe('RegistroComponent', () => {
     contestar(respuestaDe(null));
     await reposar();
     expect(texto()).toContain(revisaTuCorreo);
+  });
+});
+
+describe('RegistroComponent con Google y GitHub configurados', () => {
+  let falso: SupabaseFalso;
+  let fixture: ComponentFixture<RegistroComponent>;
+  let elemento: HTMLElement;
+
+  beforeEach(async () => {
+    falso = crearSupabaseFalso();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: SUPABASE, useValue: falso.cliente },
+        { provide: OAUTH_PROVEEDORES, useValue: ['google', 'github'] },
+      ],
+    });
+    fixture = TestBed.createComponent(RegistroComponent);
+    elemento = fixture.nativeElement;
+    await fixture.whenStable();
+  });
+
+  it('ofrece los dos proveedores y GitHub pide el suyo sin pasar por signUp', async () => {
+    const botones = Array.from(elemento.querySelectorAll('button'));
+    expect(botones.map((boton) => boton.textContent?.trim())).toEqual([
+      'Crear cuenta',
+      'Entrar con Google',
+      'Entrar con GitHub',
+    ]);
+
+    botones.find((boton) => boton.textContent?.includes('GitHub'))!.click();
+    await new Promise((resolver) => setTimeout(resolver));
+    await fixture.whenStable();
+
+    expect(falso.auth.signInWithOAuth).toHaveBeenCalledExactlyOnceWith({
+      provider: 'github',
+      options: { redirectTo: expect.stringMatching(/\/auth\/confirmar$/) },
+    });
+    expect(falso.auth.signUp).not.toHaveBeenCalled();
   });
 });
