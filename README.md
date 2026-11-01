@@ -96,8 +96,9 @@ lo que describe esta página es el comportamiento actual.
 - `contactos_compartidos`: quién tiene acceso a qué contacto, con qué rol (`rol_comparticion`:
   `lector` o `editor`) y en qué estado (`estado_comparticion`: `pendiente` o `aceptada`).
 - `invitaciones_contacto`: un email que todavía no tiene cuenta, el contacto y el rol. La clave es
-  `(contacto_id, email)`. Cuando esa persona se registra, `privado.crear_perfil` la convierte en
-  una compartición `pendiente` y borra la invitación.
+  `(contacto_id, email)`. Cuando ese email queda confirmado en `auth.users` (al confirmar el
+  registro, o en el alta con un proveedor que ya lo trae verificado), `privado.crear_perfil` la
+  convierte en una compartición `pendiente` y borra la invitación.
 - `privado.*`: funciones `SECURITY DEFINER` (para las políticas) y de trigger. El esquema no está
   expuesto en la Data API.
 - `public.compartir_contacto(p_contacto_id, p_email, p_rol)`: la RPC con la que se comparte un
@@ -123,9 +124,11 @@ ya aceptada. `anon` no ejecuta `invitaciones_pendientes()`, que devuelve solo el
 contacto y quién invita.
 
 Si el email no tiene cuenta, la RPC no falla: guarda la fila en `invitaciones_contacto` y responde
-`sin_cuenta`. El propietario la ve y puede borrarla; nadie más, y nadie la inserta a mano. Al
-registrarse, la invitación se convierte en una compartición `pendiente`, salvo que el contacto sea
-del propio usuario. Quien invita distingue «tiene cuenta» de «sin cuenta todavía».
+`sin_cuenta`. El propietario la ve y puede borrarla; nadie más, y nadie la inserta a mano. El perfil
+se crea al registrarse, pero la invitación solo se convierte en una compartición `pendiente` cuando
+`email_confirmed_at` deja de ser nulo (salvo que el contacto sea del propio usuario): GoTrue inserta
+el usuario antes de que confirme, y sin esa espera quien registrara un email ajeno se quedaría sus
+invitaciones. Quien invita distingue «tiene cuenta» de «sin cuenta todavía».
 
 ### Por qué RLS y privilegios por columna
 
@@ -177,10 +180,14 @@ signals. Los estilos son skeleton-css y Font Awesome 4.7, declarados en `angular
 están en `src/app/app.routes.ts`:
 
 - `/entrar`, `/registro` y `/auth/recuperar`: solo sin sesión (`sinSesionGuard`). Entrar y
-  registrarse ofrecen Google y GitHub además del email. Los tres formularios envían un token de
-  hCaptcha cuando hay site key.
+  registrarse ofrecen, además del email, los proveedores OAuth de `environment.oauthProveedores`
+  (vacío mientras Google y GitHub no tengan credenciales en el proyecto: con un proveedor apagado,
+  `signInWithOAuth` no avisa, redirige a un JSON de error de GoTrue). Los tres formularios envían
+  un token de hCaptcha cuando hay site key y reinician el widget tras cada envío.
 - `/auth/confirmar` y `/auth/nueva-contrasena`: destino de los enlaces de los correos y de la
-  vuelta de OAuth (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión.
+  vuelta de OAuth (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión. Sin `code`,
+  `/auth/confirmar` muestra tal cual el `?message=` de GoTrue (el primer enlace del cambio de email
+  con confirmación doble) o el `?error_description=` (OAuth cancelado o denegado).
 - `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con búsqueda, la etiqueta del rol y
   el detalle del seleccionado; `?contacto=` conserva la selección; las invitaciones pendientes se
   aceptan o se rechazan ahí), `/nuevo-contacto`, `/contactos/:id/editar`,
@@ -194,9 +201,15 @@ guardar. En el detalle de un contacto compartido se ve quién lo comparte, con s
 `/perfil` escribe `perfiles.nombre` y `perfiles.avatar_ruta`. La barra muestra el nombre en lugar
 del email cuando existe, y el avatar junto a él. El cambio de email lo confirma GoTrue en las dos
 bandejas; la pantalla no sustituye el email hasta que el perfil se vuelve a leer. La lista y la
-pantalla de compartir se vuelven a pedir cuando Realtime avisa de un cambio en `contactos`,
-`contactos_compartidos` o `invitaciones_contacto`, y también al volver a la pestaña. El canal se
-llama `agenda-<id>`: el cliente no parchea filas, vuelve a consultar.
+pantalla de compartir se vuelven a pedir cuando Realtime avisa de un cambio en `contactos` o
+`contactos_compartidos`, y también al volver a la pestaña. El canal se llama `agenda-<id>`: el
+cliente no parchea filas, vuelve a consultar. Realtime aplica la RLS a los INSERT y UPDATE, pero no
+a los DELETE: de esos difunde la clave primaria a todos los suscriptores, que en estas dos tablas
+son uuids. `invitaciones_contacto` lleva el email en la clave y por eso no se publica; el
+propietario la ve cambiar igual (por sus propias acciones y por el INSERT en `contactos_compartidos`
+que produce el canje). Mejora futura: Broadcast desde la base (`realtime.broadcast_changes` a un
+canal privado `agenda:<id>` con una política sobre `realtime.messages`), que entrega cada cambio
+solo a sus interesados y no necesita la publicación.
 
 `AuthService` expone la sesión como signals; `ContactosService` envuelve las consultas, la RPC y
 las comparticiones con Promesas; `MensajesService` pinta el aviso global y traduce los errores
@@ -329,7 +342,8 @@ locales y nunca se despliegan.
   solo para `authenticated`; los privilegios exactos (`anon` sin ninguno, `authenticated` con
   `insert` y `update` solo en las columnas de datos, y `update` de `perfiles` solo en `nombre` y
   `avatar_ruta`); el `EXECUTE` de las funciones de `privado`, y que ninguna sea ejecutable por
-  `public`; las tres tablas de la publicación `supabase_realtime`.
+  `public`; las dos tablas de la publicación `supabase_realtime` (`invitaciones_contacto` queda
+  fuera a propósito) y las columnas de `auth.users` que disparan `crear_perfil`.
 - `02_contactos.sql`: cada usuario ve y toca solo lo suyo (otro usuario no ve, edita ni borra sus
   contactos); insertar un contacto a nombre de otro falla con `42501`; semántica de lector y
   editor; borrar un contacto borra sus comparticiones; `anon` no lee.
@@ -339,9 +353,10 @@ locales y nunca se despliegan.
   un lector ve pero no edita; un editor edita, pero su `update` de `propietario_id` falla con
   `permission denied` y no borra, no comparte ni inserta comparticiones a mano; «dejar de ver»,
   rechazar y revocar; compartir con uno mismo da el error previsto; un email sin cuenta guarda una
-  invitación (`sin_cuenta`) y, al crear la cuenta, se convierte en compartición `pendiente`; el
-  email con mayúsculas y espacios se encuentra; volver a compartir cambia el rol sin duplicar y
-  sin devolver la fila a `pendiente`; `anon` no ejecuta la RPC ni `invitaciones_pendientes`.
+  invitación (`sin_cuenta`) que se convierte en compartición `pendiente` al confirmarse el email de
+  la cuenta nueva, no antes; el email con mayúsculas y espacios se encuentra; volver a compartir
+  cambia el rol sin duplicar y sin devolver la fila a `pendiente`; `anon` no ejecuta la RPC ni
+  `invitaciones_pendientes`.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
   tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`, de 100
   caracteres como mucho, y la ruta de su avatar; una ruta de otra persona falla con `22023`; el
@@ -462,7 +477,9 @@ pasado el CI.
 
 **Supabase, en Authentication** (la configuración local equivalente está en `supabase/config.toml`)
 
-- Confirmación de email activada y contraseña mínima de 8 caracteres.
+- Confirmación de email activada (el canje de las invitaciones por email espera a ella; sin
+  confirmación, quien registrara un email ajeno se quedaría sus invitaciones) y contraseña mínima
+  de 8 caracteres.
 - Site URL `https://jaisato.github.io/agenda-supabase/` y Redirect URLs
   `https://jaisato.github.io/agenda-supabase/**` y `http://localhost:4200/**`.
 - SMTP de Resend: host `smtp.resend.com`, puerto `465`, usuario `resend`, remitente
@@ -475,17 +492,23 @@ pasado el CI.
   client id y el secreto de cada consola. La Redirect URL del proveedor es la de Supabase
   (`https://zckmejrnscenxwiqykkh.supabase.co/auth/v1/callback`), no la de la aplicación. La app
   vuelve a `https://jaisato.github.io/agenda-supabase/auth/confirmar`, que ya está en Redirect
-  URLs. Sin esos secretos los botones de la demo fallan con un aviso y el email con contraseña
-  sigue funcionando. En local, Google suele necesitar `skip_nonce_check = true`.
+  URLs. Los botones solo se pintan para los proveedores de `environment.oauthProveedores`, que va
+  vacío hasta que existan esas credenciales: con un proveedor apagado, `signInWithOAuth` no
+  devuelve error, redirige el navegador a un JSON de error de GoTrue. Al activarlos en el
+  dashboard, añadir `'google'` o `'github'` ahí. El email con contraseña sigue funcionando. En
+  local, Google suele necesitar `skip_nonce_check = true`.
 - CAPTCHA: no activarlo en el proyecto alojado. La demo pública no lleva site key; si el servidor
   exigiera el token, el registro, el acceso y la recuperación dejarían de funcionar. En local sí
   está activo, con el secreto de prueba de hCaptcha, y solo a partir del siguiente `supabase start`.
 - El cambio de email ya lo hace GoTrue (`updateUser`), con confirmación en el correo nuevo y en el
   actual. No hay plantilla propia en el repositorio: vale la de cambio de email del dashboard.
 - El bucket `avatares` lo crea la migración (privado, 1 MB, JPEG, PNG o WebP). No hace falta
-  crearlo en el dashboard. Las URLs que ve el navegador son firmadas.
-- Realtime: la migración añade `contactos`, `contactos_compartidos` e `invitaciones_contacto` a la
-  publicación `supabase_realtime`. En el proyecto alojado esa publicación llega con `db push`.
+  crearlo en el dashboard; si ya existiera, la migración le pone esos límites en vez de fallar.
+  Las URLs que ve el navegador son firmadas.
+- Realtime: la migración añade `contactos` y `contactos_compartidos` a la publicación
+  `supabase_realtime` si no están ya (activarlas antes desde el dashboard no la rompe).
+  `invitaciones_contacto` no se publica: su clave lleva el email y Realtime no filtra los DELETE
+  por RLS. En el proyecto alojado esa publicación llega con `db push`.
 
 **Dónde vive cada clave**
 
@@ -604,10 +627,11 @@ unset SUPABASE_SECRET_KEY
   users». Los tests pgTAP los insertan a mano, pero dentro de transacciones que se deshacen.
 - **Alcance.** OAuth (Google y GitHub), CAPTCHA, cambio de email, avatares, Realtime e
   invitaciones a quien no tiene cuenta están en la aplicación. En el proyecto alojado, OAuth sigue
-  apagado y CAPTCHA no se activa: sin los secretos del dashboard la demo pública no debe dejar de
-  aceptar email y contraseña. La site key de producción va vacía. En local, CAPTCHA usa las claves
-  de prueba de hCaptcha y OAuth está declarado pero `enabled = false`. Fuera de alcance: pruebas
-  E2E en un navegador. El registro está abierto.
+  apagado (y sus botones ocultos: `oauthProveedores` va vacío) y CAPTCHA no se activa: sin los
+  secretos del dashboard la demo pública no debe dejar de aceptar email y contraseña. La site key de
+  producción va vacía. En local, CAPTCHA usa las claves de prueba de hCaptcha y OAuth está declarado
+  pero `enabled = false`. Fuera de alcance: pruebas E2E en un navegador y el Broadcast por usuario
+  de Realtime. El registro está abierto.
 
 ## Estructura del repositorio
 
@@ -616,7 +640,7 @@ unset SUPABASE_SECRET_KEY
 | `src/app/`              | La aplicación Angular: una carpeta por pantalla y `app.routes.ts`.                    |
 | `src/app/supabase/`     | El cliente de Supabase y `database.types.ts` (generado).                              |
 | `src/app/testing/`      | El doble del cliente de Supabase que usan los specs.                                  |
-| `src/environments/`     | URL, publishable key y site key de hCaptcha. Vacía en producción; de prueba en local. |
+| `src/environments/`     | URL, publishable key, site key de hCaptcha y proveedores OAuth; vacíos en producción. |
 | `supabase/migrations/`  | Migraciones SQL.                                                                      |
 | `supabase/tests/`       | Tests pgTAP.                                                                          |
 | `supabase/seed.sql`     | Helpers de los tests (`pruebas.*`); solo corre en local y en el CI.                   |
