@@ -44,15 +44,30 @@
           }
         </div>
 
+        <app-captcha />
+
         <div>
           <button
             type="submit"
             class="button-primary u-full-width"
-            [disabled]="form.invalid || enviando()"
+            [disabled]="form.invalid || enviando() || captchaBloquea()"
           >
             Crear cuenta
           </button>
         </div>
+        <!-- Solo los proveedores de environment.oauthProveedores: ninguno en la demo publicada -->
+        @for (proveedor of proveedores; track proveedor) {
+          <div>
+            <button
+              type="button"
+              class="u-full-width"
+              (click)="entrarCon(proveedor)"
+              [disabled]="enviando()"
+            >
+              Entrar con {{ nombreDe(proveedor) }}
+            </button>
+          </div>
+        }
       </form>
     }
   </div>

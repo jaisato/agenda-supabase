@@ -21,3 +21,12 @@ input.ng-touched.ng-valid {
 .enlaces {
   text-align: center;
 }
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  margin-bottom: 10px;
+}

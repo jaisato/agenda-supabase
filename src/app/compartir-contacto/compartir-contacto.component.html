@@ -90,6 +90,35 @@
         } @else {
           <p>Este contacto no está compartido con nadie.</p>
         }
+        @if (invitaciones().length > 0) {
+          <h5>Sin cuenta todavía</h5>
+          <table id="invitaciones" class="u-full-width">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (persona of invitaciones(); track persona.email) {
+                <tr>
+                  <td>{{ persona.email }}</td>
+                  <td>{{ persona.rol }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      [attr.aria-label]="'Revocar la invitación a ' + persona.email"
+                      (click)="revocarInvitacion(persona)"
+                    >
+                      Revocar
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
       }
 
       <a routerLink="/mis-contactos">Volver</a>

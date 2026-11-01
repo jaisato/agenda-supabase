@@ -27,6 +27,15 @@ a {
   margin-right: 10px;
 }
 
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
 .sesion button {
   margin-bottom: 0;
 }

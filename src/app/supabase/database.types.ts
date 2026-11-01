@@ -51,16 +51,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"perfiles": {
+                },"invitaciones_contacto": {
                   Row: {
-                    "creado_en": string,"email": string,"id": string,"nombre": string | null
+                    "contacto_id": string,"creado_en": string,"email": string,"rol": Database["public"]['Enums']["rol_comparticion"]
                   }
                   ComputedFields: never
                   Insert: {
-                    "creado_en"?: string,"email": string,"id": string,"nombre"?: string | null
+                    "contacto_id": string,"creado_en"?: string,"email": string,"rol": Database["public"]['Enums']["rol_comparticion"]
                   }
                   Update: {
-                    "creado_en"?: string,"email"?: string,"id"?: string,"nombre"?: string | null
+                    "contacto_id"?: string,"creado_en"?: string,"email"?: string,"rol"?: Database["public"]['Enums']["rol_comparticion"]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "invitaciones_contacto_contacto_id_fkey"
+      columns: ["contacto_id"]
+isOneToOne: false
+      referencedRelation: "contactos"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"perfiles": {
+                  Row: {
+                    "avatar_ruta": string | null,"creado_en": string,"email": string,"id": string,"nombre": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "avatar_ruta"?: string | null,"creado_en"?: string,"email": string,"id": string,"nombre"?: string | null
+                  }
+                  Update: {
+                    "avatar_ruta"?: string | null,"creado_en"?: string,"email"?: string,"id"?: string,"nombre"?: string | null
                   }
                   Relationships: [
                     
@@ -72,16 +92,10 @@ isOneToOne: false
           }
           Functions: {
             "compartir_contacto":
-{ Args: { "p_contacto_id": string,"p_email": string,"p_rol": Database["public"]['Enums']["rol_comparticion"] }; Returns: {
-              "contacto_id": string,
-"creado_en": string,
-"estado": Database["public"]['Enums']["estado_comparticion"],
-"rol": Database["public"]['Enums']["rol_comparticion"],
-"usuario_id": string
-            }
+{ Args: { "p_contacto_id": string,"p_email": string,"p_rol": Database["public"]['Enums']["rol_comparticion"] }; Returns: Database["public"]['CompositeTypes']["resultado_compartir"]
                           SetofOptions: {
         from: "*"
-        to: "contactos_compartidos"
+        to: "resultado_compartir"
         isOneToOne: true
         isSetofReturn: false
       } },
@@ -95,7 +109,9 @@ isOneToOne: false
             "estado_comparticion": "pendiente"|"aceptada","rol_comparticion": "lector"|"editor"
           }
           CompositeTypes: {
-            [_ in never]: never
+            "resultado_compartir": {
+                        "usuario_id": string | null,"rol": Database["public"]['Enums']["rol_comparticion"] | null,"estado": Database["public"]['Enums']["estado_comparticion"] | null,"email": string | null,"sin_cuenta": boolean | null
+                      }
           }
         }
 }

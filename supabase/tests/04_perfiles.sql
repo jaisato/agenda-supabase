@@ -15,7 +15,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(20);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -52,7 +52,7 @@ select pruebas.autenticar('c@test.local');
 select results_eq($$select count(*)::int from public.perfiles$$, array[1],
   'C, que no es contraparte de nadie, solo ve su propio perfil');
 
--- A solo edita su perfil, y solo el nombre, que como el de un contacto no pasa de 100 caracteres.
+-- A edita su perfil: el nombre (como mucho 100 caracteres) y la ruta de su avatar. El email no.
 -- Un update que RLS filtra no falla, afecta a cero filas; que A vea el perfil de B (los 2 perfiles
 -- de arriba) demuestra que el cero lo causa la política de update y no que la fila fuera invisible.
 -- El email no tiene privilegio de update: falla con 42501 antes de llegar a las políticas.
@@ -77,12 +77,30 @@ select throws_ok(
     where id = pruebas.id_usuario('a@test.local')$$,
   '42501', 'permission denied for table perfiles',
   'A no puede cambiar el email de su perfil (privilegio de columna)');
+select results_eq(
+  $$with u as (
+      update public.perfiles
+      set avatar_ruta = pruebas.id_usuario('a@test.local')::text || '/avatar.png'
+      where id = pruebas.id_usuario('a@test.local')
+      returning 1)
+    select count(*)::int from u$$,
+  array[1], 'A guarda la ruta de su avatar');
+select throws_ok(
+  $$update public.perfiles
+    set avatar_ruta = pruebas.id_usuario('b@test.local')::text || '/avatar.png'
+    where id = pruebas.id_usuario('a@test.local')$$,
+  '22023', 'La ruta del avatar no es válida',
+  'A no puede apuntar su avatar al fichero de otra persona');
 
 -- B, la contraparte, ve el nombre que A se ha puesto.
 select pruebas.autenticar('b@test.local');
 select results_eq(
   $$select nombre from public.perfiles where id = pruebas.id_usuario('a@test.local')$$,
   array['Ana'], 'B ve el nombre nuevo de A');
+select results_eq(
+  $$select avatar_ruta from public.perfiles where id = pruebas.id_usuario('a@test.local')$$,
+  array[pruebas.id_usuario('a@test.local')::text || '/avatar.png'],
+  'B ve la ruta del avatar de A');
 
 -- A comparte c1 también con C. Quienes reciben contactos del mismo dueño no son contrapartes entre
 -- sí: B y C ven su propio perfil y el de A, pero no el del otro.

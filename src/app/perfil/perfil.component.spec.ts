@@ -56,6 +56,31 @@ describe('PerfilComponent', () => {
     await reposar();
   });
 
+  it('cambiar email no sustituye el que se muestra', async () => {
+    await escribir('email-nuevo', 'nueva@test.es');
+    boton('Cambiar email').click();
+    await reposar();
+
+    expect(falso.auth.updateUser).toHaveBeenCalledWith(
+      { email: 'nueva@test.es' },
+      { emailRedirectTo: expect.stringMatching(/\/auth\/confirmar$/) },
+    );
+    expect(elemento.textContent).toContain('ana@test.es');
+    expect(mensajes.mensaje()?.texto).toContain('Revisa el correo nuevo y el actual');
+  });
+
+  it('rechaza un avatar que no es imagen o pesa más de 1 MB', async () => {
+    const input = elemento.querySelector<HTMLInputElement>('#avatar')!;
+    const grande = new File([new Uint8Array(1_048_577)], 'a.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { configurable: true, value: [grande] });
+
+    input.dispatchEvent(new Event('change'));
+    await reposar();
+
+    expect(mensajes.mensaje()?.texto).toContain('1 MB');
+    expect(falso.storage.upload).not.toHaveBeenCalled();
+  });
+
   it('muestra el email y el nombre guardado', () => {
     expect(elemento.textContent).toContain('ana@test.es');
     expect(campo('nombre').value).toBe('Ana');
@@ -72,7 +97,7 @@ describe('PerfilComponent', () => {
     expect(actualizacion?.cadena).toEqual([
       { metodo: 'update', args: [{ nombre: 'Ana Ruiz' }] },
       { metodo: 'eq', args: ['id', 'u1'] },
-      { metodo: 'select', args: ['id, email, nombre, creado_en'] },
+      { metodo: 'select', args: ['id, email, nombre, avatar_ruta, creado_en'] },
       { metodo: 'single', args: [] },
     ]);
     expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Nombre guardado' });

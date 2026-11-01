@@ -27,11 +27,13 @@
           }
         </div>
 
+        <app-captcha />
+
         <div>
           <button
             type="submit"
             class="button-primary u-full-width"
-            [disabled]="form.invalid || enviando()"
+            [disabled]="form.invalid || enviando() || captchaBloquea()"
           >
             Enviar enlace
           </button>

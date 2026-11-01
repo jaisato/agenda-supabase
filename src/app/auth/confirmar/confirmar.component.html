@@ -1,7 +1,18 @@
 <div class="row">
   <div class="offset-by-three six columns">
-    <h4>Confirmar cuenta</h4>
-    @if (fallido()) {
+    <!-- Cabecera neutra: aquí llegan el registro, OAuth y el cambio de email -->
+    <h4>Confirmación</h4>
+    @if (aviso(); as texto) {
+      <!-- ?message= de GoTrue: el cambio de email con confirmación doble acepta el primer enlace y
+           espera el del otro correo. No es un error. -->
+      <p>{{ texto }}</p>
+      <a class="button button-primary" routerLink="/mis-contactos">Volver a la agenda</a>
+    } @else if (fallo(); as texto) {
+      <!-- ?error=&error_description= de GoTrue: el proveedor OAuth ha denegado el acceso o la
+           persona ha cancelado -->
+      <p>{{ texto }}</p>
+      <a class="button button-primary" routerLink="/entrar">Entrar</a>
+    } @else if (fallido()) {
       <!-- Abierto en otro navegador, GoTrue ya ha confirmado la cuenta al abrir el enlace, pero el
            canje PKCE falla porque el code_verifier está en el navegador del registro -->
       <p>
@@ -10,7 +21,7 @@
       </p>
       <a class="button button-primary" routerLink="/entrar">Entrar</a>
     } @else {
-      <p>Confirmando tu cuenta…</p>
+      <p>Confirmando…</p>
     }
   </div>
 </div>

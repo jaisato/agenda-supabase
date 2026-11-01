@@ -9,13 +9,15 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(67);
+select plan(82);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
 select has_table('public', 'perfiles', 'existe la tabla perfiles');
 select has_table('public', 'contactos', 'existe la tabla contactos');
 select has_table('public', 'contactos_compartidos', 'existe la tabla contactos_compartidos');
+select has_table('public', 'invitaciones_contacto', 'existe la tabla invitaciones_contacto');
+select has_type('public', 'resultado_compartir', 'existe el tipo resultado_compartir');
 select has_enum('public', 'rol_comparticion', 'existe el enum rol_comparticion');
 select enum_has_labels('public', 'rol_comparticion', array['lector', 'editor'],
   'rol_comparticion tiene los valores lector y editor');
@@ -33,6 +35,7 @@ select has_function('privado', 'crear_perfil', 'existe privado.crear_perfil');
 select has_function('privado', 'marcar_actualizado', 'existe privado.marcar_actualizado');
 select has_function('privado', 'recortar_contacto', 'existe privado.recortar_contacto');
 select has_function('privado', 'guardar_comparticion', 'existe privado.guardar_comparticion');
+select has_function('privado', 'guardar_avatar', 'existe privado.guardar_avatar');
 select has_function('public', 'invitaciones_pendientes', 'existe public.invitaciones_pendientes');
 select has_trigger('public', 'contactos', 'marcar_actualizado',
   'contactos tiene el trigger marcar_actualizado');
@@ -40,6 +43,8 @@ select has_trigger('public', 'contactos', 'recortar_contacto',
   'contactos tiene el trigger recortar_contacto');
 select has_trigger('public', 'contactos_compartidos', 'guardar_comparticion',
   'contactos_compartidos tiene el trigger guardar_comparticion');
+select has_trigger('public', 'perfiles', 'guardar_avatar',
+  'perfiles tiene el trigger guardar_avatar');
 
 -- RLS activada en las tres tablas
 select is((select relrowsecurity from pg_class where oid = 'public.perfiles'::regclass), true,
@@ -48,6 +53,8 @@ select is((select relrowsecurity from pg_class where oid = 'public.contactos'::r
   'RLS activada en contactos');
 select is((select relrowsecurity from pg_class where oid = 'public.contactos_compartidos'::regclass),
   true, 'RLS activada en contactos_compartidos');
+select is((select relrowsecurity from pg_class where oid = 'public.invitaciones_contacto'::regclass),
+  true, 'RLS activada en invitaciones_contacto');
 
 -- Políticas (§5.4). Lo que hacen se prueba en los ficheros siguientes; aquí se fija cuáles hay y a
 -- quién se aplican, para que no entre una política de más, ni una que valga para otro rol que
@@ -63,6 +70,9 @@ select policies_are('public', 'contactos_compartidos',
   array['compartidos: ver el compartido o el dueño', 'compartidos: cambiar rol el dueño',
         'compartidos: aceptar el destinatario', 'compartidos: revocar el dueño o dejar de ver'],
   'contactos_compartidos tiene exactamente sus cuatro políticas');
+select policies_are('public', 'invitaciones_contacto',
+  array['invitaciones: las ve el propietario', 'invitaciones: las borra el propietario'],
+  'invitaciones_contacto tiene exactamente sus dos políticas');
 
 select policy_roles_are('public', 'perfiles', 'perfiles: ver el propio y las contrapartes',
   array['authenticated'], '«perfiles: ver el propio y las contrapartes» es solo de authenticated');
@@ -86,6 +96,10 @@ select policy_roles_are('public', 'contactos_compartidos', 'compartidos: aceptar
 select policy_roles_are('public', 'contactos_compartidos',
   'compartidos: revocar el dueño o dejar de ver', array['authenticated'],
   '«compartidos: revocar el dueño o dejar de ver» es solo de authenticated');
+select policy_roles_are('public', 'invitaciones_contacto', 'invitaciones: las ve el propietario',
+  array['authenticated'], '«invitaciones: las ve el propietario» es solo de authenticated');
+select policy_roles_are('public', 'invitaciones_contacto', 'invitaciones: las borra el propietario',
+  array['authenticated'], '«invitaciones: las borra el propietario» es solo de authenticated');
 
 -- Privilegios (§5.3). column_privs_are cuenta también los privilegios de tabla, así que SELECT
 -- aparece en todas las columnas; lo que se comprueba es que INSERT y UPDATE solo estén donde toca.
@@ -95,6 +109,8 @@ select table_privs_are('public', 'contactos', 'anon', '{}'::text[],
   'anon no tiene privilegios sobre contactos');
 select table_privs_are('public', 'contactos_compartidos', 'anon', '{}'::text[],
   'anon no tiene privilegios sobre contactos_compartidos');
+select table_privs_are('public', 'invitaciones_contacto', 'anon', '{}'::text[],
+  'anon no tiene privilegios sobre invitaciones_contacto');
 select column_privs_are('public', 'perfiles', 'email', 'anon', '{}'::text[],
   'anon no tiene privilegios sobre perfiles.email');
 
@@ -109,6 +125,8 @@ select column_privs_are('public', 'contactos', 'id', 'authenticated',
 
 select table_privs_are('public', 'contactos_compartidos', 'authenticated',
   array['SELECT', 'DELETE'], 'authenticated lee y borra contactos_compartidos, sin insertar');
+select table_privs_are('public', 'invitaciones_contacto', 'authenticated',
+  array['SELECT', 'DELETE'], 'authenticated lee y borra invitaciones_contacto, sin insertar');
 select column_privs_are('public', 'contactos_compartidos', 'rol', 'authenticated',
   array['SELECT', 'UPDATE'], 'authenticated actualiza contactos_compartidos.rol');
 select column_privs_are('public', 'contactos_compartidos', 'estado', 'authenticated',
@@ -120,6 +138,8 @@ select column_privs_are('public', 'perfiles', 'nombre', 'authenticated',
   array['SELECT', 'UPDATE'], 'authenticated actualiza perfiles.nombre');
 select column_privs_are('public', 'perfiles', 'email', 'authenticated',
   array['SELECT'], 'authenticated no actualiza perfiles.email');
+select column_privs_are('public', 'perfiles', 'avatar_ruta', 'authenticated',
+  array['SELECT', 'UPDATE'], 'authenticated actualiza perfiles.avatar_ruta');
 
 -- EXECUTE de las funciones de privado (§5.2). Postgres lo concede a public por defecto y la migración
 -- lo revoca; function_privs_are cuenta también lo heredado de public, así que «anon sin privilegios»
@@ -163,6 +183,39 @@ select is_empty(
                   from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
                   where a.grantee = 0 and a.privilege_type = 'EXECUTE')$$,
   'ninguna función de privado es ejecutable por public');
+
+-- invitaciones_contacto no se publica: Realtime no aplica RLS a los DELETE y difundiría el email
+-- invitado (está en la clave primaria) a cualquier suscriptor.
+select is(
+  (select array_agg(tablename order by tablename)
+     from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public'),
+  array['contactos', 'contactos_compartidos']::name[],
+  'Realtime publica contactos y comparticiones, no las invitaciones por email');
+
+-- crear_perfil se dispara al crear el usuario y al cambiar email, email_confirmed_at o
+-- last_sign_in_at: el canje de las invitaciones espera a la confirmación y se repite en cada inicio
+-- de sesión (lo prueba 03_compartir.sql).
+select is(
+  (select string_agg(a.attname::text, ',' order by a.attname)
+     from pg_trigger t
+     join pg_attribute a
+       on a.attrelid = t.tgrelid
+      and a.attnum = any (string_to_array(t.tgattr::text, ' ')::int2[])
+    where t.tgrelid = 'auth.users'::regclass and t.tgname = 'crear_perfil'),
+  'email,email_confirmed_at,last_sign_in_at',
+  'crear_perfil se dispara al cambiar email, email_confirmed_at y last_sign_in_at de auth.users');
+
+-- La RPC y el canje toman el mismo advisory lock por email: la carrera (compartir mientras se crea
+-- esa cuenta ya confirmada) no se puede reproducir en pgTAP, así que se fija la definición.
+select ok(
+  pg_get_functiondef('public.compartir_contacto(uuid, text, public.rol_comparticion)'::regprocedure)
+    like '%pg_advisory_xact_lock(hashtext(''agenda:invitacion:'' || v_email))%',
+  'compartir_contacto se serializa por email con pg_advisory_xact_lock');
+select ok(
+  pg_get_functiondef('privado.crear_perfil()'::regprocedure)
+    like '%pg_advisory_xact_lock(hashtext(''agenda:invitacion:'' || lower(btrim(new.email))))%',
+  'crear_perfil toma el mismo lock, con el mismo texto normalizado, antes de canjear');
 
 -- El trigger crear_perfil copia el usuario nuevo de auth.users a perfiles
 select pruebas.crear_usuario('a@test.local');

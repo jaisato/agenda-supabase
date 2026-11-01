@@ -27,6 +27,10 @@ export class BarraNavegacionComponent {
     return nombre || this.auth.usuario()?.email || '';
   });
 
+  protected urlAvatar(): string | null {
+    return this.perfil.urlAvatar();
+  }
+
   async salir(): Promise<void> {
     try {
       await this.auth.salir();

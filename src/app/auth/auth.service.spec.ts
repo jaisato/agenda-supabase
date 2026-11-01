@@ -155,6 +155,34 @@ describe('AuthService', () => {
 
       expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledExactlyOnceWith('codigo-pkce');
     });
+
+    it('entrarCon llama a signInWithOAuth y vuelve a /auth/confirmar', async () => {
+      await service.entrarCon('github');
+
+      expect(falso.auth.signInWithOAuth).toHaveBeenCalledExactlyOnceWith({
+        provider: 'github',
+        options: { redirectTo: expect.stringMatching(/\/auth\/confirmar$/) },
+      });
+    });
+
+    it('cambiarEmail pide el cambio y la confirmación en /auth/confirmar', async () => {
+      await service.cambiarEmail('nueva@test.es');
+
+      expect(falso.auth.updateUser).toHaveBeenCalledExactlyOnceWith(
+        { email: 'nueva@test.es' },
+        { emailRedirectTo: expect.stringMatching(/\/auth\/confirmar$/) },
+      );
+    });
+
+    it('con captchaToken lo añade a entrar y sin él no manda options', async () => {
+      await service.entrar('ana@test.es', 'secreto123', 'token-captcha');
+
+      expect(falso.auth.signInWithPassword).toHaveBeenCalledExactlyOnceWith({
+        email: 'ana@test.es',
+        password: 'secreto123',
+        options: { captchaToken: 'token-captcha' },
+      });
+    });
   });
 
   describe('si Supabase devuelve un error, lo lanza tal cual para que quien llama lo muestre', () => {

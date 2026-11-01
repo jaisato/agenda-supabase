@@ -6,6 +6,8 @@ import { MockInstance } from 'vitest';
 import { MensajesService } from '../../mensajes.service';
 import { SUPABASE } from '../../supabase/supabase.client';
 import { SupabaseFalso, crearSupabaseFalso } from '../../testing/supabase-falso';
+import { CaptchaComponent } from '../captcha.component';
+import { OAUTH_PROVEEDORES } from '../oauth-proveedores';
 import { EntrarComponent } from './entrar.component';
 
 const ana = { access_token: 'token-u1', user: { id: 'u1', email: 'ana@test.es' } } as Session;
@@ -62,6 +64,25 @@ describe('EntrarComponent', () => {
     expect(entrar().textContent?.trim()).toBe('Entrar');
     expect(enlace('Crear cuenta')?.getAttribute('href')).toBe('/registro');
     expect(enlace('¿Olvidaste la contraseña?')?.getAttribute('href')).toBe('/auth/recuperar');
+  });
+
+  // environment.ts (el de los specs y la demo publicada) no lista ningún proveedor OAuth: con uno
+  // apagado en el proyecto, signInWithOAuth mandaría a un JSON de error de GoTrue.
+  it('sin proveedores OAuth configurados solo ofrece «Entrar», sin Google ni GitHub', () => {
+    expect(
+      Array.from(elemento.querySelectorAll('button')).map((boton) => boton.textContent?.trim()),
+    ).toEqual(['Entrar']);
+    expect(falso.auth.signInWithOAuth).not.toHaveBeenCalled();
+  });
+
+  it('tras cada envío reinicia el captcha: su token es de un solo uso', async () => {
+    const reiniciar = vi.spyOn(CaptchaComponent.prototype, 'reiniciar');
+    falso.auth.signInWithPassword.mockResolvedValue(sinSesion);
+    await escribir('ana@test.es', 'mala');
+
+    await enviar();
+
+    expect(reiniciar).toHaveBeenCalledOnce();
   });
 
   it('deshabilita «Entrar» hasta que hay email y contraseña', async () => {
@@ -138,5 +159,53 @@ describe('EntrarComponent', () => {
     contestar(sinSesion);
     await reposar();
     expect(entrar().disabled).toBe(false);
+  });
+});
+
+// Con las credenciales en el proyecto, environment.oauthProveedores lista los proveedores y los
+// botones aparecen.
+describe('EntrarComponent con Google y GitHub configurados', () => {
+  let falso: SupabaseFalso;
+  let fixture: ComponentFixture<EntrarComponent>;
+  let elemento: HTMLElement;
+  const botones = () =>
+    Array.from(elemento.querySelectorAll('button')).map((boton) => boton.textContent?.trim());
+  const reposar = async () => {
+    await new Promise((resolver) => setTimeout(resolver));
+    await fixture.whenStable();
+  };
+
+  beforeEach(async () => {
+    falso = crearSupabaseFalso();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: SUPABASE, useValue: falso.cliente },
+        { provide: OAUTH_PROVEEDORES, useValue: ['google', 'github'] },
+      ],
+    });
+    fixture = TestBed.createComponent(EntrarComponent);
+    elemento = fixture.nativeElement;
+    await fixture.whenStable();
+  });
+
+  it('ofrece los dos proveedores después de «Entrar»', () => {
+    expect(botones()).toEqual(['Entrar', 'Entrar con Google', 'Entrar con GitHub']);
+  });
+
+  it('entrar con Google pide el proveedor y no envía la contraseña', async () => {
+    const google = Array.from(elemento.querySelectorAll('button')).find((boton) =>
+      boton.textContent?.includes('Google'),
+    )!;
+
+    google.click();
+    await reposar();
+
+    expect(falso.auth.signInWithOAuth).toHaveBeenCalledExactlyOnceWith({
+      provider: 'google',
+      options: { redirectTo: expect.stringMatching(/\/auth\/confirmar$/) },
+    });
+    expect(falso.auth.signInWithPassword).not.toHaveBeenCalled();
+    expect(document.querySelector('script[src*="hcaptcha"]')).toBeNull();
   });
 });

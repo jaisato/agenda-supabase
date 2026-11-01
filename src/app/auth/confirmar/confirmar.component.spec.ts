@@ -34,12 +34,16 @@ describe('ConfirmarComponent', () => {
     await new Promise((resolver) => setTimeout(resolver));
     await fixture.whenStable();
   };
-  // Lo que en la aplicación entrega el router (withComponentInputBinding) desde ?code=…
-  const abrir = async (code?: string) => {
+  // Lo que en la aplicación entrega el router (withComponentInputBinding) desde ?code=…, ?message=…
+  // o ?error_description=… (los nombres son los de la query, como los recibe el componente).
+  const abrir = async (code?: string, query: Record<string, string> = {}) => {
     fixture = TestBed.createComponent(ConfirmarComponent);
     elemento = fixture.nativeElement;
     if (code !== undefined) {
       fixture.componentRef.setInput('code', code);
+    }
+    for (const [nombre, valor] of Object.entries(query)) {
+      fixture.componentRef.setInput(nombre, valor);
     }
     await reposar();
   };
@@ -71,10 +75,37 @@ describe('ConfirmarComponent', () => {
       expect(texto()).toContain(noSePudoConfirmar);
       expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
     });
+
+    // El cambio de email con confirmación doble: el primer enlace acepta y GoTrue vuelve sin code,
+    // con el aviso de que falta el del otro correo. No es un error y no hay nada que canjear.
+    it('con ?message= muestra el texto de GoTrue tal cual, sin darlo por error ni canjear nada', async () => {
+      const aviso =
+        'Confirmation link accepted. Please proceed to confirm link sent to the other email';
+
+      await abrir(undefined, { message: aviso });
+
+      expect(texto()).toContain(aviso);
+      expect(texto()).not.toContain(noSePudoConfirmar);
+      expect(texto()).not.toContain('Confirmando…');
+      expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+      expect(navegar).not.toHaveBeenCalled();
+      expect(mensajes.mensaje()).toBeNull();
+    });
+
+    // OAuth cancelado o denegado en el proveedor: GoTrue vuelve con ?error=&error_description=.
+    it('con ?error_description= muestra ese texto y el enlace a /entrar, sin canjear nada', async () => {
+      await abrir(undefined, { error: 'access_denied', error_description: 'User denied access' });
+
+      expect(texto()).toContain('User denied access');
+      expect(texto()).not.toContain(noSePudoConfirmar);
+      expect(enlaceEntrar()?.getAttribute('href')).toBe('/entrar');
+      expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+      expect(navegar).not.toHaveBeenCalled();
+    });
   });
 
   describe('con code', () => {
-    it('lo canjea, avisa «Cuenta confirmada» y navega a /mis-contactos sustituyendo en el historial la URL con el code', async () => {
+    it('lo canjea, avisa «Sesión iniciada» y navega a /mis-contactos sustituyendo en el historial la URL con el code', async () => {
       falso.auth.exchangeCodeForSession.mockResolvedValue({
         data: { session: ana, user: ana.user },
         error: null,
@@ -83,17 +114,17 @@ describe('ConfirmarComponent', () => {
       await abrir('codigo-pkce');
 
       expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledExactlyOnceWith('codigo-pkce');
-      expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Cuenta confirmada' });
+      expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Sesión iniciada' });
       // replaceUrl: «Atrás» no debe volver a una URL cuyo code ya está gastado.
       expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], { replaceUrl: true });
     });
 
-    it('mientras lo canjea muestra «Confirmando tu cuenta…», no un error ni una pantalla en blanco', async () => {
+    it('mientras lo canjea muestra «Confirmando…», no un error ni una pantalla en blanco', async () => {
       falso.auth.exchangeCodeForSession.mockReturnValue(new Promise(() => {}));
 
       await abrir('codigo-pkce');
 
-      expect(texto()).toContain('Confirmando tu cuenta…');
+      expect(texto()).toContain('Confirmando…');
       expect(texto()).not.toContain(noSePudoConfirmar);
       expect(navegar).not.toHaveBeenCalled();
     });
@@ -107,10 +138,10 @@ describe('ConfirmarComponent', () => {
       await abrir('caducado');
 
       expect(texto()).toContain(noSePudoConfirmar);
-      expect(texto()).not.toContain('Confirmando tu cuenta');
+      expect(texto()).not.toContain('Confirmando…');
       expect(enlaceEntrar()?.getAttribute('href')).toBe('/entrar');
       expect(navegar).not.toHaveBeenCalled();
-      // El aviso es el propio texto de la página: ni «Cuenta confirmada» ni un error técnico aparte.
+      // El aviso es el propio texto de la página: ni «Sesión iniciada» ni un error técnico aparte.
       expect(mensajes.mensaje()).toBeNull();
     });
 

@@ -124,7 +124,7 @@ describe('rutas de la aplicación', () => {
             {
               metodo: 'select',
               args: [
-                '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)',
+                '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email, avatar_ruta)',
               ],
             },
             { metodo: 'eq', args: ['id', 'c2'] },
@@ -181,7 +181,7 @@ describe('rutas de la aplicación', () => {
             {
               metodo: 'select',
               args: [
-                '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)',
+                '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email, avatar_ruta)',
               ],
             },
             { metodo: 'eq', args: ['id', 'c3'] },
@@ -193,6 +193,14 @@ describe('rutas de la aplicación', () => {
           cadena: [
             { metodo: 'select', args: ['usuario_id, rol, estado, perfiles(email)'] },
             { metodo: 'eq', args: ['contacto_id', 'c3'] },
+          ],
+        },
+        {
+          tabla: 'invitaciones_contacto',
+          cadena: [
+            { metodo: 'select', args: ['email, rol'] },
+            { metodo: 'eq', args: ['contacto_id', 'c3'] },
+            { metodo: 'order', args: ['email'] },
           ],
         },
       ]);
@@ -402,7 +410,7 @@ describe('rutas de la aplicación', () => {
       expect(falso.auth.exchangeCodeForSession).toHaveBeenCalledExactlyOnceWith('codigo-pkce');
     });
 
-    it('el enlace de confirmación abre la sesión y lleva a /mis-contactos con el aviso «Cuenta confirmada»', async () => {
+    it('el enlace de confirmación abre la sesión y lleva a /mis-contactos con el aviso «Sesión iniciada»', async () => {
       // Como el cliente real: el canje emite SIGNED_IN antes de resolver, y el guard de
       // /mis-contactos ya encuentra la sesión.
       falso.auth.exchangeCodeForSession.mockImplementation(async () => {
@@ -419,7 +427,7 @@ describe('rutas de la aplicación', () => {
       expect(harness.routeNativeElement?.textContent).toContain('Elon Musk');
       expect(TestBed.inject(MensajesService).mensaje()).toEqual({
         tipo: 'exito',
-        texto: 'Cuenta confirmada',
+        texto: 'Sesión iniciada',
       });
     });
 

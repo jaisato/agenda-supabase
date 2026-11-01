@@ -9,7 +9,7 @@ import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-d
 import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
 
 const SELECCION =
-  '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)';
+  '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email, avatar_ruta)';
 const sesionDe = (id: string) =>
   ({ access_token: `token-${id}`, user: { id, email: `${id}@test.es` } }) as Session;
 const tim: DatosContacto = {
@@ -249,15 +249,74 @@ describe('ContactosService', () => {
         p_email: 'b@x.es',
         p_rol: 'lector',
       });
-      // La RPC devuelve la fila de contactos_compartidos, sin email: es el que se ha pedido.
+      // La fila antigua no trae email ni sin_cuenta: el email es el pedido y hay cuenta.
       expect(comparticion).toEqual({
         usuario_id: 'u2',
         rol: 'lector',
         email: 'b@x.es',
         estado: 'pendiente',
+        sin_cuenta: false,
       });
       // Es una RPC, no una consulta de tabla.
       expect(falso.consultas).toEqual([]);
+    });
+
+    it('si no hay cuenta, devuelve la invitación con el email ya normalizado', async () => {
+      falso.respuestaRpc('compartir_contacto', {
+        data: {
+          usuario_id: null,
+          rol: 'editor',
+          estado: 'pendiente',
+          email: 'nadie@test.local',
+          sin_cuenta: true,
+        },
+        error: null,
+      });
+
+      await expect(service.compartir('c1', '  Nadie@Test.LOCAL ', 'editor')).resolves.toEqual({
+        usuario_id: null,
+        rol: 'editor',
+        estado: 'pendiente',
+        email: 'nadie@test.local',
+        sin_cuenta: true,
+      });
+    });
+  });
+
+  describe('invitaciones por email', () => {
+    it('lista las del contacto y tolera data null', async () => {
+      falso.respuestaDe('invitaciones_contacto', { data: null, error: null });
+
+      await expect(service.listarInvitacionesEmail('c1')).resolves.toEqual([]);
+
+      falso.respuestaDe('invitaciones_contacto', {
+        data: [{ email: 'b@x.es', rol: 'editor' }],
+        error: null,
+      });
+
+      await expect(service.listarInvitacionesEmail('c1')).resolves.toEqual([
+        { email: 'b@x.es', rol: 'editor' },
+      ]);
+      expect(falso.consultas.at(-1)).toEqual({
+        tabla: 'invitaciones_contacto',
+        cadena: [
+          { metodo: 'select', args: ['email, rol'] },
+          { metodo: 'eq', args: ['contacto_id', 'c1'] },
+          { metodo: 'order', args: ['email'] },
+        ],
+      });
+    });
+
+    it('revocarInvitacion borra por contacto y email', async () => {
+      falso.respuestaDe('invitaciones_contacto', { data: null, error: null });
+
+      await service.revocarInvitacion('c1', 'b@x.es');
+
+      expect(falso.consultas[0].cadena).toEqual([
+        { metodo: 'delete', args: [] },
+        { metodo: 'eq', args: ['contacto_id', 'c1'] },
+        { metodo: 'eq', args: ['email', 'b@x.es'] },
+      ]);
     });
   });
 

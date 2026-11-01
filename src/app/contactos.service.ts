@@ -8,6 +8,9 @@ import {
   ContactoVisible,
   DatosContacto,
   InvitacionPendiente,
+  InvitacionPorEmail,
+  PropietarioVisible,
+  ResultadoCompartir,
   Rol,
 } from './contacto';
 import { SUPABASE } from './supabase/supabase.client';
@@ -16,11 +19,11 @@ import { SUPABASE } from './supabase/supabase.client';
 // propietario ve todas las de sus contactos; quien recibe un contacto, solo la suya, y de ella
 // sale su rol.
 const CONTACTO_CON_COMPARTICIONES =
-  '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)';
+  '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email, avatar_ruta)';
 
 type FilaConComparticiones = Contacto & {
   contactos_compartidos: { usuario_id: string; rol: Rol }[];
-  propietario: { nombre: string | null; email: string } | null;
+  propietario: { nombre: string | null; email: string; avatar_ruta?: string | null } | null;
 };
 
 /**
@@ -88,12 +91,13 @@ export class ContactosService {
   }
 
   /**
-   * Comparte el contacto con la persona de ese email. Solo el propietario puede; la RPC normaliza
-   * el email y, si ya estaba compartido con esa persona, le cambia el rol sin tocar el estado. Una
-   * fila nueva queda `pendiente`. Lanza el error de la RPC: `42501` (no es el propietario),
-   * `PT404` (no hay nadie con ese email) o `22023` (compartir con uno mismo).
+   * Comparte el contacto con ese email. Solo el propietario puede. La RPC normaliza el email y, si
+   * ya había una compartición, le cambia el rol sin tocar el estado. Una fila nueva queda
+   * `pendiente`. Si el email no tiene cuenta, guarda una invitación (`sin_cuenta`) en vez de fallar.
+   * Lanza el error de la RPC: `42501` (no es el propietario) o `22023` (email vacío o el propio).
+   * `PT404` ya no sale de esta RPC; se sigue traduciendo por si una versión antigua lo devolviera.
    */
-  async compartir(contactoId: string, email: string, rol: Rol): Promise<Comparticion> {
+  async compartir(contactoId: string, email: string, rol: Rol): Promise<ResultadoCompartir> {
     const { data, error } = await this.supabase.rpc('compartir_contacto', {
       p_contacto_id: contactoId,
       p_email: email,
@@ -102,8 +106,22 @@ export class ContactosService {
     if (error) {
       throw error;
     }
-    // La RPC devuelve la fila de contactos_compartidos, que no lleva el email: es el que se pidió.
-    return { usuario_id: data.usuario_id, rol: data.rol, email, estado: data.estado };
+    if (!data) {
+      throw new PostgrestError({
+        message: 'La compartición no devolvió resultado',
+        details: '',
+        hint: '',
+        code: 'PGRST116',
+      });
+    }
+    // Una fila antigua de la RPC no trae email ni sin_cuenta: el email es el pedido y hay cuenta.
+    return {
+      usuario_id: data.usuario_id,
+      rol: data.rol ?? rol,
+      estado: data.estado ?? 'pendiente',
+      email: data.email ?? email,
+      sin_cuenta: data.sin_cuenta ?? false,
+    };
   }
 
   /** Invitaciones de la persona con la sesión. Solo el nombre del contacto, no sus datos. */
@@ -168,6 +186,31 @@ export class ContactosService {
     }
   }
 
+  /** Invitaciones a emails que todavía no tienen cuenta. Solo el propietario las ve. */
+  async listarInvitacionesEmail(contactoId: string): Promise<InvitacionPorEmail[]> {
+    const { data, error } = await this.supabase
+      .from('invitaciones_contacto')
+      .select('email, rol')
+      .eq('contacto_id', contactoId)
+      .order('email');
+    if (error) {
+      throw error;
+    }
+    return data ?? [];
+  }
+
+  /** Borra una invitación por email. Lo hace el propietario. */
+  async revocarInvitacion(contactoId: string, email: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('invitaciones_contacto')
+      .delete()
+      .eq('contacto_id', contactoId)
+      .eq('email', email);
+    if (error) {
+      throw error;
+    }
+  }
+
   /** Las personas con acceso al contacto, con su email. Solo el propietario las ve todas. */
   async listarComparticiones(contactoId: string): Promise<Comparticion[]> {
     const { data, error } = await this.supabase
@@ -194,6 +237,19 @@ export class ContactosService {
       contacto.propietario_id === usuarioId
         ? 'propietario'
         : (contactos_compartidos.find((c) => c.usuario_id === usuarioId)?.rol ?? 'lector');
-    return { ...contacto, rol, propietario: propietario ?? { nombre: null, email: '' } };
+    return { ...contacto, rol, propietario: this.propietarioDe(propietario) };
+  }
+
+  private propietarioDe(
+    propietario: { nombre: string | null; email: string; avatar_ruta?: string | null } | null,
+  ): PropietarioVisible {
+    if (!propietario) {
+      return { nombre: null, email: '', avatar_ruta: null };
+    }
+    return {
+      nombre: propietario.nombre,
+      email: propietario.email,
+      avatar_ruta: propietario.avatar_ruta ?? null,
+    };
   }
 }

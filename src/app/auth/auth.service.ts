@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Session } from '@supabase/supabase-js';
 
 import { SUPABASE } from '../supabase/supabase.client';
+import { ProveedorOAuth } from './oauth-proveedores';
 
 /**
  * Sesión de la persona usuaria sobre Supabase Auth. Las operaciones lanzan el `error` de Supabase
@@ -25,23 +26,46 @@ export class AuthService {
     this.listo = this.supabase.auth.getSession().then(({ data }) => this.sesion.set(data.session));
   }
 
-  async registrar(email: string, password: string): Promise<void> {
+  async registrar(email: string, password: string, captchaToken?: string): Promise<void> {
     const { error } = await this.supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: this.urlDe('auth/confirmar') },
+      options: {
+        emailRedirectTo: this.urlDe('auth/confirmar'),
+        ...(captchaToken ? { captchaToken } : {}),
+      },
     });
     if (error) {
       throw error;
     }
   }
 
-  async entrar(email: string, password: string): Promise<void> {
-    const { data, error } = await this.supabase.auth.signInWithPassword({ email, password });
+  async entrar(email: string, password: string, captchaToken?: string): Promise<void> {
+    const { data, error } = await this.supabase.auth.signInWithPassword({
+      email,
+      password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
+    });
     if (error) {
       throw error;
     }
     this.sesion.set(data.session);
+  }
+
+  /**
+   * Google o GitHub. La vuelta es la misma ruta PKCE que el enlace del correo. No hay petición
+   * previa: supabase-js redirige el navegador a /auth/v1/authorize, y si el proveedor está apagado
+   * en el proyecto es GoTrue quien responde, con un JSON de error. Por eso los botones solo se
+   * pintan para los proveedores de `OAUTH_PROVEEDORES`.
+   */
+  async entrarCon(proveedor: ProveedorOAuth): Promise<void> {
+    const { error } = await this.supabase.auth.signInWithOAuth({
+      provider: proveedor,
+      options: { redirectTo: this.urlDe('auth/confirmar') },
+    });
+    if (error) {
+      throw error;
+    }
   }
 
   async salir(): Promise<void> {
@@ -53,9 +77,10 @@ export class AuthService {
     this.sesion.set(null);
   }
 
-  async recuperar(email: string): Promise<void> {
+  async recuperar(email: string, captchaToken?: string): Promise<void> {
     const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
       redirectTo: this.urlDe('auth/nueva-contrasena'),
+      ...(captchaToken ? { captchaToken } : {}),
     });
     if (error) {
       throw error;
@@ -64,6 +89,20 @@ export class AuthService {
 
   async nuevaContrasena(password: string): Promise<void> {
     const { error } = await this.supabase.auth.updateUser({ password });
+    if (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Pide el cambio de email. Con `double_confirm_changes`, no surte efecto hasta que se confirman
+   * el correo nuevo y el actual. El perfil sigue mostrando el email de ahora.
+   */
+  async cambiarEmail(email: string): Promise<void> {
+    const { error } = await this.supabase.auth.updateUser(
+      { email },
+      { emailRedirectTo: this.urlDe('auth/confirmar') },
+    );
     if (error) {
       throw error;
     }

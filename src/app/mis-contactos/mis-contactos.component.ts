@@ -18,6 +18,7 @@ import { ContactosService } from '../contactos.service';
 import { DetallesContactoComponent } from '../detalles-contacto/detalles-contacto.component';
 import { ListaContactosComponent } from '../lista-contactos/lista-contactos.component';
 import { MensajesService } from '../mensajes.service';
+import { TiempoRealService } from '../tiempo-real.service';
 
 @Component({
   imports: [ListaContactosComponent, DetallesContactoComponent],
@@ -28,6 +29,7 @@ export class MisContactosComponent {
   private readonly _contactosService = inject(ContactosService);
   private readonly _mensajes = inject(MensajesService);
   private readonly _router = inject(Router);
+  private readonly tiempoReal = inject(TiempoRealService);
 
   // Datos del resolver de la ruta (contactosResolver), que withComponentInputBinding()
   // entrega como input.
@@ -66,6 +68,15 @@ export class MisContactosComponent {
     };
     documento.addEventListener('visibilitychange', alVolver);
     destroyRef.onDestroy(() => documento.removeEventListener('visibilitychange', alVolver));
+
+    // revision 0 es el valor de arranque: el resolver ya trajo la lista. Solo un cambio real
+    // vuelve a pedirla.
+    effect(() => {
+      if (this.tiempoReal.revision() === 0) {
+        return;
+      }
+      void this.recargar();
+    });
 
     effect(() => {
       const id = this.contacto();
