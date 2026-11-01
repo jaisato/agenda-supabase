@@ -64,26 +64,43 @@ revoke execute on function privado.guardar_avatar() from public;
 create trigger guardar_avatar before update on public.perfiles
   for each row execute function privado.guardar_avatar();
 
--- § Canje al confirmar el email
+-- § Canje al confirmar el email (y en cada inicio de sesión)
 --
 -- Misma función que ya dispara el trigger de auth.users, que pasa a dispararse también cuando
--- cambia email_confirmed_at. El perfil se crea como antes, al insertar el usuario; las
--- invitaciones solo se canjean cuando el email está confirmado. GoTrue inserta el usuario antes de
--- que confirme: sin esta espera, quien registrara primero un email ajeno se quedaría (pendientes)
--- las invitaciones a ese email. Con un proveedor OAuth o el admin API el usuario nace confirmado y
--- el canje va en el propio insert; con el registro por email, en la confirmación. Una invitación
--- al propio contacto (el email nuevo es el del dueño) se tira: no se convierte en una compartición
--- consigo mismo. Si al canjear ya existe una compartición para ese contacto y esa persona (la creó
--- la RPC mientras el email seguía sin confirmar, o un cambio de email junta dos identidades), se
--- respeta tal cual (do nothing): ahí está la última decisión del dueño, y la invitación solo se
--- borra. Sin esto, la confirmación devolvía el rol antiguo de la invitación.
+-- cambian email_confirmed_at y last_sign_in_at. El perfil se crea como antes, al insertar el
+-- usuario; las invitaciones solo se canjean cuando el email está confirmado. GoTrue inserta el
+-- usuario antes de que confirme: sin esta espera, quien registrara primero un email ajeno se
+-- quedaría (pendientes) las invitaciones a ese email. Con un proveedor OAuth o el admin API el
+-- usuario nace confirmado y el canje va en el propio insert; con el registro por email, en la
+-- confirmación. Una invitación al propio contacto (el email nuevo es el del dueño) se tira: no se
+-- convierte en una compartición consigo mismo. Si al canjear ya existe una compartición para ese
+-- contacto y esa persona (la creó la RPC mientras el email seguía sin confirmar, o un cambio de
+-- email junta dos identidades), se respeta tal cual (do nothing): ahí está la última decisión del
+-- dueño, y la invitación solo se borra. Sin esto, la confirmación devolvía el rol antiguo de la
+-- invitación.
+--
+-- La RPC compartir_contacto y este canje se serializan por email con un advisory lock
+-- transaccional (pg_advisory_xact_lock sobre hashtext('agenda:invitacion:' || email), el mismo
+-- texto normalizado en los dos sitios). Sin él, compartir con un email justo mientras se creaba
+-- esa cuenta ya confirmada (OAuth, admin API) podía dejar una invitación que nadie canjearía: la
+-- RPC no veía aún el perfil y el canje no veía aún la invitación, y las dos transacciones
+-- confirmaban. Con el lock, o la RPC ve el perfil y comparte directamente, o el canje ve la
+-- invitación ya insertada. Por si una invitación quedara huérfana por cualquier otra causa, el
+-- trigger se dispara también al cambiar last_sign_in_at (cada inicio de sesión): el canje es
+-- idempotente (do nothing más el borrado), así que repetirlo no cuesta nada. El upsert del perfil
+-- solo escribe cuando el email cambia, para no reescribir la fila en cada login.
 
 create or replace function privado.crear_perfil() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+  if new.email is not null then
+    perform pg_advisory_xact_lock(hashtext('agenda:invitacion:' || lower(btrim(new.email))));
+  end if;
+
   insert into public.perfiles (id, email)
   values (new.id, new.email)
-  on conflict (id) do update set email = excluded.email;
+  on conflict (id) do update set email = excluded.email
+    where perfiles.email is distinct from excluded.email;
 
   if new.email_confirmed_at is null then
     return new;
@@ -104,7 +121,7 @@ end $$;
 -- or replace y no drop + create: crear un trigger pide el privilegio TRIGGER sobre auth.users, que
 -- postgres tiene; borrarlo pediría ser el dueño de la tabla (supabase_auth_admin).
 create or replace trigger crear_perfil
-  after insert or update of email, email_confirmed_at on auth.users
+  after insert or update of email, email_confirmed_at, last_sign_in_at on auth.users
   for each row execute function privado.crear_perfil();
 
 -- § RPC
@@ -156,6 +173,11 @@ begin
   ) then
     raise exception 'No puedes compartir un contacto contigo mismo' using errcode = '22023';
   end if;
+
+  -- El mismo lock por email que privado.crear_perfil(): o se ve el perfil ya creado y se comparte
+  -- directamente, o el canje verá la invitación ya insertada. Sin él, las dos transacciones podían
+  -- cruzarse y dejar una invitación para una cuenta ya confirmada que nadie canjearía.
+  perform pg_advisory_xact_lock(hashtext('agenda:invitacion:' || v_email));
 
   select p.id into v_usuario from public.perfiles p where lower(p.email) = v_email;
   if v_usuario is null then

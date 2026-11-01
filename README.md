@@ -97,8 +97,9 @@ lo que describe esta página es el comportamiento actual.
   `lector` o `editor`) y en qué estado (`estado_comparticion`: `pendiente` o `aceptada`).
 - `invitaciones_contacto`: un email que todavía no tiene cuenta, el contacto y el rol. La clave es
   `(contacto_id, email)`. Cuando ese email queda confirmado en `auth.users` (al confirmar el
-  registro, o en el alta con un proveedor que ya lo trae verificado), `privado.crear_perfil` la
-  convierte en una compartición `pendiente` y borra la invitación.
+  registro, o en el alta con un proveedor que ya lo trae verificado) o, si quedara pendiente, en el
+  siguiente inicio de sesión, `privado.crear_perfil` la convierte en una compartición `pendiente` y
+  borra la invitación.
 - `privado.*`: funciones `SECURITY DEFINER` (para las políticas) y de trigger. El esquema no está
   expuesto en la Data API.
 - `public.compartir_contacto(p_contacto_id, p_email, p_rol)`: la RPC con la que se comparte un
@@ -135,7 +136,13 @@ RPC crea la compartición (`pendiente`, con el rol nuevo) y borra la invitación
 contacto, así la confirmación no devuelve el rol antiguo y la pantalla de compartir no enseña dos
 filas para la misma persona. Por la misma razón el canje nunca pisa una compartición que ya exista
 (solo borra la invitación), y compartir con un perfil confirmado también limpia una invitación
-huérfana de ese contacto.
+huérfana de ese contacto. La RPC y el canje se serializan por email con un advisory lock
+transaccional (`pg_advisory_xact_lock(hashtext('agenda:invitacion:' || email))`): compartir con un
+email justo mientras se crea esa cuenta ya confirmada (OAuth, admin API) ya no puede dejar una
+invitación que nadie canjee; o la RPC ve el perfil y comparte directamente, o el canje ve la
+invitación. Y por si una invitación quedara huérfana por cualquier otra causa, el trigger se dispara
+también al cambiar `last_sign_in_at`: se entrega en el siguiente inicio de sesión (el canje es
+idempotente).
 
 ### Por qué RLS y privilegios por columna
 
@@ -352,7 +359,8 @@ locales y nunca se despliegan.
   `insert` y `update` solo en las columnas de datos, y `update` de `perfiles` solo en `nombre` y
   `avatar_ruta`); el `EXECUTE` de las funciones de `privado`, y que ninguna sea ejecutable por
   `public`; las dos tablas de la publicación `supabase_realtime` (`invitaciones_contacto` queda
-  fuera a propósito) y las columnas de `auth.users` que disparan `crear_perfil`.
+  fuera a propósito), las columnas de `auth.users` que disparan `crear_perfil`, y que la RPC y el
+  canje toman el mismo advisory lock por email.
 - `02_contactos.sql`: cada usuario ve y toca solo lo suyo (otro usuario no ve, edita ni borra sus
   contactos); insertar un contacto a nombre de otro falla con `42501`; semántica de lector y
   editor; borrar un contacto borra sus comparticiones; `anon` no lee.
@@ -366,8 +374,9 @@ locales y nunca se despliegan.
   la cuenta nueva, no antes; volver a compartir con el perfil aún sin confirmar crea la
   compartición, borra la invitación y la confirmación respeta ese rol; el canje no pisa una
   compartición existente; compartir con un perfil confirmado limpia una invitación huérfana; el
-  email con mayúsculas y espacios se encuentra; volver a compartir cambia el rol sin duplicar y sin
-  devolver la fila a `pendiente`; `anon` no ejecuta la RPC ni `invitaciones_pendientes`.
+  canje también corre al iniciar sesión; el email con mayúsculas y espacios se encuentra; volver a
+  compartir cambia el rol sin duplicar y sin devolver la fila a `pendiente`; `anon` no ejecuta la
+  RPC ni `invitaciones_pendientes`.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
   tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`, de 100
   caracteres como mucho, y la ruta de su avatar; una ruta de otra persona falla con `22023`; el

@@ -16,7 +16,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(88);
+select plan(92);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -420,6 +420,26 @@ select results_eq(
   'A comparte con C, que ya tiene la cuenta confirmada');
 select is_empty($$select * from public.invitaciones_contacto where email = 'c@test.local'$$,
   'la invitación huérfana a ese email desaparece');
+
+-- Red de seguridad: el canje también corre al iniciar sesión (last_sign_in_at). Una invitación que
+-- quedara huérfana por cualquier causa (la pone postgres a mano) se entrega en el siguiente login
+-- de una cuenta ya confirmada, sin pasar por email ni por email_confirmed_at.
+reset role;
+select lives_ok($$select pruebas.crear_usuario('login@test.local')$$,
+  'login@test.local ya tiene la cuenta confirmada');
+insert into public.invitaciones_contacto (contacto_id, email, rol)
+values (current_setting('prueba.c1')::uuid, 'login@test.local', 'editor');
+select lives_ok(
+  $$update auth.users set last_sign_in_at = now()
+    where id = pruebas.id_usuario('login@test.local')$$,
+  'GoTrue anota el inicio de sesión');
+select is_empty($$select * from public.invitaciones_contacto where email = 'login@test.local'$$,
+  'al iniciar sesión, la invitación huérfana se canjea');
+select results_eq(
+  $$select rol::text, estado::text from public.contactos_compartidos
+    where usuario_id = pruebas.id_usuario('login@test.local')$$,
+  $$values ('editor', 'pendiente')$$,
+  'y nace la compartición pendiente con el rol de la invitación');
 
 -- Un visitante sin sesión no puede ejecutar la RPC ni listar invitaciones. También daría 42501 si
 -- la función llegara a ejecutarse, así que se comprueba el mensaje: es el del privilegio de

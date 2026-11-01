@@ -9,7 +9,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(80);
+select plan(82);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -193,8 +193,9 @@ select is(
   array['contactos', 'contactos_compartidos']::name[],
   'Realtime publica contactos y comparticiones, no las invitaciones por email');
 
--- crear_perfil se dispara al crear el usuario y al cambiar email o email_confirmed_at: el canje de
--- las invitaciones espera a la confirmación (lo prueba 03_compartir.sql).
+-- crear_perfil se dispara al crear el usuario y al cambiar email, email_confirmed_at o
+-- last_sign_in_at: el canje de las invitaciones espera a la confirmación y se repite en cada inicio
+-- de sesión (lo prueba 03_compartir.sql).
 select is(
   (select string_agg(a.attname::text, ',' order by a.attname)
      from pg_trigger t
@@ -202,8 +203,19 @@ select is(
        on a.attrelid = t.tgrelid
       and a.attnum = any (string_to_array(t.tgattr::text, ' ')::int2[])
     where t.tgrelid = 'auth.users'::regclass and t.tgname = 'crear_perfil'),
-  'email,email_confirmed_at',
-  'crear_perfil se dispara al cambiar email y email_confirmed_at de auth.users');
+  'email,email_confirmed_at,last_sign_in_at',
+  'crear_perfil se dispara al cambiar email, email_confirmed_at y last_sign_in_at de auth.users');
+
+-- La RPC y el canje toman el mismo advisory lock por email: la carrera (compartir mientras se crea
+-- esa cuenta ya confirmada) no se puede reproducir en pgTAP, así que se fija la definición.
+select ok(
+  pg_get_functiondef('public.compartir_contacto(uuid, text, public.rol_comparticion)'::regprocedure)
+    like '%pg_advisory_xact_lock(hashtext(''agenda:invitacion:'' || v_email))%',
+  'compartir_contacto se serializa por email con pg_advisory_xact_lock');
+select ok(
+  pg_get_functiondef('privado.crear_perfil()'::regprocedure)
+    like '%pg_advisory_xact_lock(hashtext(''agenda:invitacion:'' || lower(btrim(new.email))))%',
+  'crear_perfil toma el mismo lock, con el mismo texto normalizado, antes de canjear');
 
 -- El trigger crear_perfil copia el usuario nuevo de auth.users a perfiles
 select pruebas.crear_usuario('a@test.local');
