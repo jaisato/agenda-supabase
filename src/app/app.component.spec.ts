@@ -1,10 +1,14 @@
+import { ApplicationRef, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { Session } from '@supabase/supabase-js';
 
 import { AppComponent } from './app.component';
+import { authGuard } from './auth/auth.guard';
+import { AuthService } from './auth/auth.service';
 import { MensajesService } from './mensajes.service';
 import { SUPABASE } from './supabase/supabase.client';
-import { crearSupabaseFalso } from './testing/supabase-falso';
+import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
 
 describe('AppComponent', () => {
   let fixture: ComponentFixture<AppComponent>;
@@ -68,5 +72,52 @@ describe('AppComponent', () => {
 
     expect(mensajes.mensaje()).toBeNull();
     expect(aviso()).toBeNull();
+  });
+});
+
+describe('AppComponent al perder la sesión', () => {
+  const ana = { access_token: 'token-u1', user: { id: 'u1', email: 'ana@test.es' } } as Session;
+  let falso: SupabaseFalso;
+  let router: Router;
+
+  @Component({ template: '' })
+  class Vacio {}
+
+  beforeEach(async () => {
+    falso = crearSupabaseFalso();
+    falso.auth.getSession.mockResolvedValue({ data: { session: ana }, error: null });
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([
+          { path: 'privada', component: Vacio, canActivate: [authGuard] },
+          { path: 'publica', component: Vacio },
+          { path: 'entrar', component: Vacio },
+        ]),
+        { provide: SUPABASE, useValue: falso.cliente },
+      ],
+    });
+    router = TestBed.inject(Router);
+    const fixture = TestBed.createComponent(AppComponent);
+    await TestBed.inject(AuthService).listo;
+    await fixture.whenStable();
+  });
+
+  it('en una ruta privada, un SIGNED_OUT (otra pestaña, token caducado) lleva a /entrar', async () => {
+    await router.navigateByUrl('/privada');
+    expect(router.url).toBe('/privada');
+
+    falso.emitirAuth('SIGNED_OUT', null);
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(router.url).toBe('/entrar');
+  });
+
+  it('en una ruta pública no navega', async () => {
+    await router.navigateByUrl('/publica');
+
+    falso.emitirAuth('SIGNED_OUT', null);
+    await TestBed.inject(ApplicationRef).whenStable();
+
+    expect(router.url).toBe('/publica');
   });
 });
