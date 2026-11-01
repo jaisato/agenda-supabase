@@ -130,6 +130,13 @@ se crea al registrarse, pero la invitación solo se convierte en una compartici�
 el usuario antes de que confirme, y sin esa espera quien registrara un email ajeno se quedaría sus
 invitaciones. Quien invita distingue «tiene cuenta» de «sin cuenta todavía».
 
+Entre el registro y la confirmación el perfil ya existe: si el dueño vuelve a compartir entonces, la
+RPC crea la compartición (`pendiente`, con el rol nuevo) y borra la invitación por email de ese
+contacto, así la confirmación no devuelve el rol antiguo y la pantalla de compartir no enseña dos
+filas para la misma persona. Por la misma razón el canje nunca pisa una compartición que ya exista
+(solo borra la invitación), y compartir con un perfil confirmado también limpia una invitación
+huérfana de ese contacto.
+
 ### Por qué RLS y privilegios por columna
 
 - **RLS decide qué filas.** Un contacto lo ve su propietario o quien tiene una compartición aceptada; lo edita el propietario o un editor; lo borra solo el propietario. Todas las políticas son
@@ -156,8 +163,9 @@ invitaciones. Quien invita distingue «tiene cuenta» de «sin cuenta todavía»
   `insert`, y `invitaciones_contacto` tampoco. La función `compartir_contacto` comprueba que quien
   llama es el propietario, normaliza el email (minúsculas y sin espacios en los extremos) y, si ya
   estaba compartido, cambia el rol en vez de duplicar y sin tocar el estado. Si el email tiene
-  perfil, crea o actualiza la compartición. Si no lo tiene, hace lo mismo en `invitaciones_contacto`
-  y devuelve `sin_cuenta`. No busca el email con un `select` del cliente sobre `perfiles`: cada
+  perfil (aunque siga sin confirmar), crea o actualiza la compartición y borra la invitación por
+  email que hubiera para ese contacto. Si no lo tiene, hace lo mismo en `invitaciones_contacto` y
+  devuelve `sin_cuenta`. No busca el email con un `select` del cliente sobre `perfiles`: cada
   usuario solo lee el suyo y los de sus contrapartes. Sus errores son `42501` (quien llama no es el
   propietario) y `22023` (email vacío, sin `@`, demasiado largo, o el propio). La aplicación
   distingue los errores por `error.code`, nunca por el estado HTTP. Un `PT404` de una base anterior
@@ -167,7 +175,8 @@ invitaciones. Quien invita distingue «tiene cuenta» de «sin cuenta todavía»
 - **El avatar es un fichero privado.** El bucket `avatares` no es público (1 MB, JPEG, PNG o WebP).
   Las políticas de `storage.objects` dejan al dueño subir, sustituir y borrar solo
   `<su id>/avatar.jpg|png|webp`, y leer el suyo o el de una contraparte (`privado.es_contraparte`,
-  también con la invitación pendiente). El cliente pide una URL firmada de una hora.
+  también con la invitación pendiente). El cliente pide una URL firmada de una hora y la renueva
+  cuando le quedan menos de cinco minutos.
   `storage.protect_delete()` impide un `delete` directo por SQL; el borrado va por la API de
   Storage. `anon` conserva los privilegios de tabla que pone Supabase sobre `storage.objects`; sin
   política no ve filas, y la migración no se los quita.
@@ -354,9 +363,11 @@ locales y nunca se despliegan.
   `permission denied` y no borra, no comparte ni inserta comparticiones a mano; «dejar de ver»,
   rechazar y revocar; compartir con uno mismo da el error previsto; un email sin cuenta guarda una
   invitación (`sin_cuenta`) que se convierte en compartición `pendiente` al confirmarse el email de
-  la cuenta nueva, no antes; el email con mayúsculas y espacios se encuentra; volver a compartir
-  cambia el rol sin duplicar y sin devolver la fila a `pendiente`; `anon` no ejecuta la RPC ni
-  `invitaciones_pendientes`.
+  la cuenta nueva, no antes; volver a compartir con el perfil aún sin confirmar crea la
+  compartición, borra la invitación y la confirmación respeta ese rol; el canje no pisa una
+  compartición existente; compartir con un perfil confirmado limpia una invitación huérfana; el
+  email con mayúsculas y espacios se encuentra; volver a compartir cambia el rol sin duplicar y sin
+  devolver la fila a `pendiente`; `anon` no ejecuta la RPC ni `invitaciones_pendientes`.
 - `04_perfiles.sql`: nadie ve el perfil de otro hasta que hay una compartición entre ambos, y un
   tercero nunca, aunque reciba contactos del mismo dueño; cada uno solo edita su `nombre`, de 100
   caracteres como mucho, y la ruta de su avatar; una ruta de otra persona falla con `22023`; el
