@@ -19,19 +19,11 @@ export class SortContactsPipe implements PipeTransform {
     // it. A pipe is meant to present the value it is given, not rewrite it -
     // and the component still holds that array as the order the API
     // returned.
+    const sentido = orden === 'asc' ? 1 : -1;
     return contactos.slice().sort((contactoA: T, contactoB: T): number => {
-      let nombreContactoA = `${contactoA.nombre} ${contactoA.apellidos}`.toLowerCase();
-      let nombreContactoB = `${contactoB.nombre} ${contactoB.apellidos}`.toLowerCase();
-
-      return nombreContactoA > nombreContactoB
-        ? orden === 'asc'
-          ? 1
-          : -1
-        : nombreContactoA < nombreContactoB
-          ? orden === 'asc'
-            ? -1
-            : 1
-          : 0;
+      const nombreContactoA = `${contactoA.nombre} ${contactoA.apellidos}`;
+      const nombreContactoB = `${contactoB.nombre} ${contactoB.apellidos}`;
+      return nombreContactoA.localeCompare(nombreContactoB, 'es') * sentido;
     });
   }
 }

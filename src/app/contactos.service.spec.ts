@@ -8,7 +8,8 @@ import { SUPABASE } from './supabase/supabase.client';
 import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-de-prueba';
 import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
 
-const SELECCION = '*, contactos_compartidos(usuario_id, rol)';
+const SELECCION =
+  '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)';
 const sesionDe = (id: string) =>
   ({ access_token: `token-${id}`, user: { id, email: `${id}@test.es` } }) as Session;
 const tim: DatosContacto = {

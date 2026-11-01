@@ -7,10 +7,12 @@ import { SUPABASE } from './supabase/supabase.client';
 // Un contacto con las comparticiones embebidas. La RLS decide qué comparticiones llegan: el
 // propietario ve todas las de sus contactos; quien recibe un contacto, solo la suya, y de ella
 // sale su rol.
-const CONTACTO_CON_COMPARTICIONES = '*, contactos_compartidos(usuario_id, rol)';
+const CONTACTO_CON_COMPARTICIONES =
+  '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)';
 
 type FilaConComparticiones = Contacto & {
   contactos_compartidos: { usuario_id: string; rol: Rol }[];
+  propietario: { nombre: string | null; email: string } | null;
 };
 
 /**
@@ -136,13 +138,14 @@ export class ContactosService {
   }
 
   private visible(fila: FilaConComparticiones, usuarioId: string | undefined): ContactoVisible {
-    const { contactos_compartidos, ...contacto } = fila;
+    const { contactos_compartidos, propietario, ...contacto } = fila;
     // La RLS solo deja ver contactos propios o compartidos con la persona, así que una de las dos
-    // se cumple siempre; si no, el rol mínimo.
+    // se cumple siempre; si no, el rol mínimo. El perfil del dueño llega embebido: quien recibe el
+    // contacto es su contraparte y la política de perfiles se lo deja ver.
     const rol =
       contacto.propietario_id === usuarioId
         ? 'propietario'
         : (contactos_compartidos.find((c) => c.usuario_id === usuarioId)?.rol ?? 'lector');
-    return { ...contacto, rol };
+    return { ...contacto, rol, propietario: propietario ?? { nombre: null, email: '' } };
   }
 }

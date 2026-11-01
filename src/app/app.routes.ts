@@ -11,6 +11,7 @@ import { CompartirContactoComponent } from './compartir-contacto/compartir-conta
 import { EditarContactoComponent } from './editar-contacto/editar-contacto.component';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
+import { PerfilComponent } from './perfil/perfil.component';
 import { contactoResolver } from './contacto.resolver';
 import { contactosResolver } from './contactos.resolver';
 
@@ -38,6 +39,7 @@ export const routes: Routes = [
     component: NuevoContactoComponent,
     canActivate: [authGuard],
   },
+  { path: 'perfil', component: PerfilComponent, canActivate: [authGuard] },
   {
     path: 'contactos/:id/editar',
     component: EditarContactoComponent,

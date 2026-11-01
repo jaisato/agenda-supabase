@@ -15,6 +15,7 @@ import { EditarContactoComponent } from './editar-contacto/editar-contacto.compo
 import { MensajesService } from './mensajes.service';
 import { MisContactosComponent } from './mis-contactos/mis-contactos.component';
 import { NuevoContactoComponent } from './nuevo-contacto/nuevo-contacto.component';
+import { PerfilComponent } from './perfil/perfil.component';
 import { SUPABASE } from './supabase/supabase.client';
 import { contactoDePrueba, contactoVisibleDePrueba } from './testing/contactos-de-prueba';
 import { SupabaseFalso, crearSupabaseFalso } from './testing/supabase-falso';
@@ -86,6 +87,25 @@ describe('rutas de la aplicación', () => {
       expect(harness.routeNativeElement?.querySelector('form #nombre')).not.toBeNull();
     });
 
+    it('/perfil muestra el email y el nombre público', async () => {
+      falso.respuestaDe('perfiles', {
+        data: {
+          id: 'u1',
+          email: 'ana@test.es',
+          nombre: 'Ana',
+          creado_en: '2026-10-01T10:00:00+00:00',
+        },
+        error: null,
+      });
+
+      await harness.navigateByUrl('/perfil', PerfilComponent);
+      await reposar();
+
+      const pantalla = harness.routeNativeElement!;
+      expect(pantalla.textContent).toContain('ana@test.es');
+      expect(pantalla.querySelector<HTMLInputElement>('#nombre')?.value).toBe('Ana');
+    });
+
     it('/contactos/:id/editar resuelve el contacto por su id, lo entrega al componente como input y rellena el formulario', async () => {
       // maybeSingle: una fila, no una lista.
       falso.respuestaDe('contactos', { data: filaBill, error: null });
@@ -101,7 +121,12 @@ describe('rutas de la aplicación', () => {
         {
           tabla: 'contactos',
           cadena: [
-            { metodo: 'select', args: ['*, contactos_compartidos(usuario_id, rol)'] },
+            {
+              metodo: 'select',
+              args: [
+                '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)',
+              ],
+            },
             { metodo: 'eq', args: ['id', 'c2'] },
             { metodo: 'maybeSingle', args: [] },
           ],
@@ -153,7 +178,12 @@ describe('rutas de la aplicación', () => {
         {
           tabla: 'contactos',
           cadena: [
-            { metodo: 'select', args: ['*, contactos_compartidos(usuario_id, rol)'] },
+            {
+              metodo: 'select',
+              args: [
+                '*, contactos_compartidos(usuario_id, rol), propietario:perfiles!contactos_propietario_id_fkey(nombre, email)',
+              ],
+            },
             { metodo: 'eq', args: ['id', 'c3'] },
             { metodo: 'maybeSingle', args: [] },
           ],
@@ -305,6 +335,13 @@ describe('rutas de la aplicación', () => {
       await harness.navigateByUrl('/nuevo-contacto', EntrarComponent);
 
       expect(url()).toBe('/entrar');
+    });
+
+    it('/perfil acaba en /entrar, sin pedir el perfil', async () => {
+      await harness.navigateByUrl('/perfil', EntrarComponent);
+
+      expect(url()).toBe('/entrar');
+      expect(falso.cliente.from).not.toHaveBeenCalled();
     });
 
     it('/contactos/:id/editar acaba en /entrar, sin pedir el contacto', async () => {

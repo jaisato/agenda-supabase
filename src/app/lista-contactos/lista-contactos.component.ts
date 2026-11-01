@@ -12,6 +12,7 @@ import { SortContactsPipe } from '../sort-contacts.pipe';
 export class ListaContactosComponent {
   // Usamos la función 'input' para enlazar datos de entrada.
   readonly contactos = input<ContactoVisible[]>([]);
+  readonly seleccionadoId = input<string | null>(null);
 
   readonly contactoSeleccionado = output<ContactoVisible>();
   notificarContactoSeleccionado(contacto: ContactoVisible): void {

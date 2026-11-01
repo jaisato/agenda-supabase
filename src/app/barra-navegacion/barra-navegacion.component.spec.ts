@@ -61,12 +61,13 @@ describe('BarraNavegacionComponent', () => {
   });
 
   describe('con sesión', () => {
-    it('ofrece «Mis Contactos» y «Nuevo Contacto», el email de quien ha entrado y «Salir», pero no «Entrar»', async () => {
+    it('ofrece «Mis Contactos», «Nuevo Contacto» y «Perfil», el email de quien ha entrado y «Salir», pero no «Entrar»', async () => {
       await crear(ana);
 
       expect(enlaces()).toEqual([
         ['Mis Contactos', '/mis-contactos'],
         ['Nuevo Contacto', '/nuevo-contacto'],
+        ['Perfil', '/perfil'],
       ]);
       expect(elemento.querySelector('nav')?.textContent).toContain('ana@test.es');
       expect(salir()).toBeDefined();
@@ -106,7 +107,11 @@ describe('BarraNavegacionComponent', () => {
 
     falso.emitirAuth('SIGNED_IN', ana);
     await fixture.whenStable();
-    expect(enlaces().map(([texto]) => texto)).toEqual(['Mis Contactos', 'Nuevo Contacto']);
+    expect(enlaces().map(([texto]) => texto)).toEqual([
+      'Mis Contactos',
+      'Nuevo Contacto',
+      'Perfil',
+    ]);
     expect(elemento.querySelector('nav')?.textContent).toContain('ana@test.es');
 
     falso.emitirAuth('SIGNED_OUT', null);

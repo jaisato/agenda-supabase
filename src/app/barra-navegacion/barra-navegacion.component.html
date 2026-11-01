@@ -7,8 +7,11 @@
       <li>
         <a routerLink="/nuevo-contacto" routerLinkActive="seleccionada">Nuevo Contacto</a>
       </li>
+      <li>
+        <a routerLink="/perfil" routerLinkActive="seleccionada">Perfil</a>
+      </li>
       <li class="sesion">
-        <span class="email">{{ usuario.email }}</span>
+        <span class="email">{{ nombreVisible() }}</span>
         <button type="button" (click)="salir()">Salir</button>
       </li>
     } @else {

@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 
@@ -22,17 +22,41 @@ export class MisContactosComponent {
   // Datos del resolver de la ruta (contactosResolver), que withComponentInputBinding()
   // entrega como input.
   readonly contactos = input.required<ContactoVisible[]>();
+  // Query ?contacto=: el id sobrevive a recargar y a volver de editar o compartir.
+  readonly contacto = input<string>();
 
   // Sin zone.js, lo que se asigna tras un await no se repinta salvo que sea un signal. La lista
   // parte de la del resolver y se actualiza al eliminar.
   protected readonly lista = linkedSignal(() => this.contactos());
+  protected readonly busqueda = signal('');
+  private readonly consulta = computed(() => this.busqueda().trim().toLocaleLowerCase('es'));
   // Dos listas con el mismo componente: los contactos propios y los que otras personas han
   // compartido (como lector o editor).
   protected readonly propios = computed(() => this.lista().filter((c) => c.rol === 'propietario'));
   protected readonly compartidos = computed(() =>
     this.lista().filter((c) => c.rol !== 'propietario'),
   );
+  protected readonly propiosVisibles = computed(() =>
+    this.propios().filter((c) => this.coincide(c)),
+  );
+  protected readonly compartidosVisibles = computed(() =>
+    this.compartidos().filter((c) => this.coincide(c)),
+  );
   protected readonly seleccionado = signal<ContactoVisible | null>(null);
+
+  constructor() {
+    effect(() => {
+      const id = this.contacto();
+      if (!id) {
+        return;
+      }
+      this.seleccionado.set(this.lista().find((c) => c.id === id) ?? null);
+    });
+  }
+
+  protected actualizarBusqueda(evento: Event): void {
+    this.busqueda.set((evento.target as HTMLInputElement).value);
+  }
 
   async eliminarContacto(contacto: ContactoVisible): Promise<void> {
     if (!confirm(`¿Estás seguro de eliminar a ${contacto.nombre}?`)) {
@@ -76,6 +100,7 @@ export class MisContactosComponent {
 
   verDetallesContacto(contacto: ContactoVisible): void {
     this.seleccionado.set(contacto);
+    void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: contacto.id } });
   }
 
   navegarRuta(ruta: string): void {
@@ -90,5 +115,19 @@ export class MisContactosComponent {
   private quitarDeLasListas(contacto: ContactoVisible): void {
     this.seleccionado.update((actual) => (actual?.id === contacto.id ? null : actual));
     this.lista.update((contactos) => contactos.filter((c) => c.id !== contacto.id));
+    if (this.contacto() === contacto.id) {
+      void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
+    }
+  }
+
+  private coincide(contacto: ContactoVisible): boolean {
+    const consulta = this.consulta();
+    if (!consulta) {
+      return true;
+    }
+    return [contacto.nombre, contacto.apellidos, contacto.email, contacto.telefono]
+      .join(' ')
+      .toLocaleLowerCase('es')
+      .includes(consulta);
   }
 }

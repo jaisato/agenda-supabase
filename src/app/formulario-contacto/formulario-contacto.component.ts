@@ -20,7 +20,22 @@ export class FormularioContactoComponent {
   // '#formContacto="ngForm"' es un NgForm (formulario dirigido por plantilla), no un FormGroup.
   notificarGuardado(form: NgForm) {
     // form.value solo tiene los seis campos con name, aunque `inicial` traiga más (un contacto
-    // entero): es justo lo que la base de datos deja insertar o actualizar.
-    this.guardar.emit(form.value as DatosContacto);
+    // entero): es justo lo que la base de datos deja insertar o actualizar. Los extremos se
+    // recortan aquí y otra vez en el trigger recortar_contacto.
+    const bruto = form.value as DatosContacto;
+    const datos: DatosContacto = {
+      nombre: bruto.nombre.trim(),
+      apellidos: bruto.apellidos.trim(),
+      email: bruto.email.trim(),
+      telefono: bruto.telefono.trim(),
+      facebook: bruto.facebook.trim(),
+      twitter: bruto.twitter.trim(),
+    };
+    if (!datos.nombre) {
+      form.controls['nombre'].setValue('');
+      form.controls['nombre'].markAsTouched();
+      return;
+    }
+    this.guardar.emit(datos);
   }
 }

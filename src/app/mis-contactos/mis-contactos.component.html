@@ -1,17 +1,38 @@
 <div class="row">
   <!-- listas de contactos: los propios y los compartidos conmigo -->
   <div class="six columns">
+    <label for="buscar">Buscar</label>
+    <input
+      id="buscar"
+      class="u-full-width"
+      type="search"
+      placeholder="Nombre, email o teléfono"
+      [value]="busqueda()"
+      (input)="actualizarBusqueda($event)"
+    />
     <h4>Mis contactos</h4>
-    <lista-contactos [contactos]="propios()" (contactoSeleccionado)="verDetallesContacto($event)">
+    <lista-contactos
+      [contactos]="propiosVisibles()"
+      [seleccionadoId]="seleccionado()?.id ?? null"
+      (contactoSeleccionado)="verDetallesContacto($event)"
+    >
     </lista-contactos>
+    @if (propios().length === 0) {
+      <p>Todavía no tienes contactos. Crea el primero en «Nuevo Contacto».</p>
+    } @else if (propiosVisibles().length === 0) {
+      <p>Ningún contacto tuyo coincide con la búsqueda.</p>
+    }
     <h4>Compartidos conmigo</h4>
     <lista-contactos
-      [contactos]="compartidos()"
+      [contactos]="compartidosVisibles()"
+      [seleccionadoId]="seleccionado()?.id ?? null"
       (contactoSeleccionado)="verDetallesContacto($event)"
     >
     </lista-contactos>
     @if (compartidos().length === 0) {
       <p>Nadie ha compartido contactos contigo todavía.</p>
+    } @else if (compartidosVisibles().length === 0) {
+      <p>Ningún contacto compartido coincide con la búsqueda.</p>
     }
   </div>
   <!-- Detalles del contacto seleccionado -->

@@ -2,16 +2,38 @@
   <div>
     <!-- Nombre contacto -->
     <h5>{{ contacto.nombre }} {{ contacto.apellidos }}</h5>
+    @if (
+      contacto.rol !== 'propietario' && (contacto.propietario.nombre || contacto.propietario.email)
+    ) {
+      <p>Compartido por {{ contacto.propietario.nombre || contacto.propietario.email }}</p>
+    }
     <hr />
-    <!-- Botones para ver perfiles en redes sociales -->
-    <button class="icono" (click)="notificarNavegacionFacebook()">
-      <i class="fa fa-facebook-square" aria-hidden="true"></i>
-    </button>
-    <button class="icono" (click)="notificarNavegacionTwitter()">
-      <i class="fa fa-twitter-square" aria-hidden="true"></i>
-    </button>
+    <!-- Botones para ver perfiles en redes sociales. Sin usuario no hay a dónde ir. -->
+    @if (tienePerfil(contacto.facebook)) {
+      <button
+        type="button"
+        class="icono"
+        [attr.aria-label]="'Facebook de ' + contacto.nombre"
+        (click)="notificarNavegacionFacebook()"
+      >
+        <i class="fa fa-facebook-square" aria-hidden="true"></i>
+      </button>
+    }
+    @if (tienePerfil(contacto.twitter)) {
+      <button
+        type="button"
+        class="icono"
+        [attr.aria-label]="'Twitter de ' + contacto.nombre"
+        (click)="notificarNavegacionTwitter()"
+      >
+        <i class="fa fa-twitter-square" aria-hidden="true"></i>
+      </button>
+    }
     <hr />
-    <div>{{ contacto.telefono }} | {{ contacto.email }}</div>
+    @if (linea(contacto); as texto) {
+      <div>{{ texto }}</div>
+    }
+    <p>Actualizado el {{ actualizado(contacto.actualizado_en) }}</p>
     <!-- Acciones según el rol: editar (propietario y editor), compartir y eliminar (propietario) y
          dejar de ver (quien lo tiene compartido) -->
     <div class="acciones">
@@ -38,4 +60,6 @@
       }
     </div>
   </div>
+} @else {
+  <p>Selecciona un contacto para ver sus datos.</p>
 }

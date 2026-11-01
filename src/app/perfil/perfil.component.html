@@ -1,0 +1,83 @@
+<div class="row">
+  <div class="offset-by-three six columns">
+    <h4>Tu perfil</h4>
+    <p>{{ email() }}</p>
+
+    <form #formNombre="ngForm" (ngSubmit)="guardarNombre(formNombre)" novalidate>
+      <div>
+        <label for="nombre">Nombre público</label>
+        <input
+          class="u-full-width"
+          type="text"
+          id="nombre"
+          name="nombre"
+          maxlength="100"
+          autocomplete="nickname"
+          placeholder="Ej. Ana"
+          [ngModel]="nombre()"
+          (ngModelChange)="nombre.set($event)"
+          #fieldNombre="ngModel"
+        />
+        @if (fieldNombre.touched && fieldNombre.invalid) {
+          <div class="msg-error">El nombre no puede pasar de 100 caracteres</div>
+        }
+      </div>
+      <div>
+        <button
+          type="submit"
+          class="button-primary u-full-width"
+          [disabled]="formNombre.invalid || guardandoNombre()"
+        >
+          Guardar nombre
+        </button>
+      </div>
+    </form>
+
+    <h5>Cambiar contraseña</h5>
+    <form #formClave="ngForm" (ngSubmit)="guardarContrasena(formClave)" novalidate>
+      <div>
+        <label for="password">Nueva contraseña</label>
+        <input
+          class="u-full-width"
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="new-password"
+          ngModel
+          #fieldPassword="ngModel"
+          required
+          minlength="8"
+        />
+        @if (fieldPassword.touched && fieldPassword.invalid) {
+          <div class="msg-error">La contraseña debe tener al menos 8 caracteres</div>
+        }
+      </div>
+      <div>
+        <label for="confirmacion">Repite la contraseña</label>
+        <input
+          class="u-full-width"
+          type="password"
+          id="confirmacion"
+          name="confirmacion"
+          autocomplete="new-password"
+          ngModel
+          #fieldConfirmacion="ngModel"
+          required
+          minlength="8"
+        />
+        @if (contrasenasDistintas()) {
+          <div class="msg-error">Las contraseñas no coinciden</div>
+        }
+      </div>
+      <div>
+        <button
+          type="submit"
+          class="button-primary u-full-width"
+          [disabled]="formClave.invalid || guardandoContrasena()"
+        >
+          Guardar contraseña
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthError } from '@supabase/supabase-js';
 
 import { AuthService } from '../auth/auth.service';
 import { MensajesService } from '../mensajes.service';
+import { PerfilService } from '../perfil.service';
 
 @Component({
   selector: 'barra-navegacion',
@@ -17,8 +18,14 @@ import { MensajesService } from '../mensajes.service';
 })
 export class BarraNavegacionComponent {
   protected readonly auth = inject(AuthService);
+  private readonly perfil = inject(PerfilService);
   private readonly mensajes = inject(MensajesService);
   private readonly router = inject(Router);
+
+  protected readonly nombreVisible = computed(() => {
+    const nombre = this.perfil.perfil()?.nombre?.trim();
+    return nombre || this.auth.usuario()?.email || '';
+  });
 
   async salir(): Promise<void> {
     try {

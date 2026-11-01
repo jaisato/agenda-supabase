@@ -52,10 +52,14 @@ describe('MisContactosComponent', () => {
   let mensajes: MensajesService;
   let navegar: MockInstance<Router['navigate']>;
   const listas = () => Array.from(elemento.querySelectorAll('lista-contactos'));
-  // El nombre de cada <li> de una de las dos listas, sin la etiqueta del rol.
+  // El nombre de cada fila de una de las dos listas, sin la etiqueta del rol.
   const nombres = (lista: 'propios' | 'compartidos') =>
-    Array.from(listas()[lista === 'propios' ? 0 : 1].querySelectorAll('li'), (li) =>
-      li.firstChild?.textContent?.trim(),
+    Array.from(
+      listas()[lista === 'propios' ? 0 : 1].querySelectorAll('li button.fila'),
+      (boton) => {
+        const rol = boton.querySelector('.rol')?.textContent ?? '';
+        return boton.textContent?.replace(rol, '').trim();
+      },
     );
   const roles = () =>
     Array.from(listas()[1].querySelectorAll('li span.rol'), (rol) => rol.textContent?.trim());
@@ -79,7 +83,11 @@ describe('MisContactosComponent', () => {
     await reposar();
   };
   const seleccionar = (lista: 'propios' | 'compartidos', indice = 0) =>
-    clic(listas()[lista === 'propios' ? 0 : 1].querySelectorAll('li')[indice]);
+    clic(
+      listas()[lista === 'propios' ? 0 : 1].querySelectorAll<HTMLButtonElement>('button.fila')[
+        indice
+      ],
+    );
 
   beforeEach(async () => {
     falso = crearSupabaseFalso();
@@ -111,6 +119,9 @@ describe('MisContactosComponent', () => {
   it('no pinta ningún detalle hasta seleccionar un contacto', () => {
     expect(detalles()).toBeUndefined();
     expect(acciones()).toEqual([]);
+    expect(elemento.querySelector('detalles-contacto')?.textContent).toContain(
+      'Selecciona un contacto para ver sus datos.',
+    );
   });
 
   it('si nadie ha compartido nada, lo dice bajo «Compartidos conmigo»', async () => {
@@ -122,6 +133,54 @@ describe('MisContactosComponent', () => {
 
     expect(nombres('compartidos')).toEqual([]);
     expect(elemento.textContent).toContain(aviso);
+  });
+
+  it('si no hay contactos propios, lo dice', async () => {
+    fixture.componentRef.setInput('contactos', [bill]);
+    await fixture.whenStable();
+
+    expect(elemento.textContent).toContain('Todavía no tienes contactos.');
+  });
+
+  it('la búsqueda filtra por nombre, email o teléfono en las dos listas', async () => {
+    const buscar = elemento.querySelector<HTMLInputElement>('#buscar')!;
+    buscar.value = 'tesla';
+    buscar.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+
+    expect(nombres('propios')).toEqual([]);
+    expect(nombres('compartidos')).toEqual(['Elon Musk']);
+    expect(elemento.textContent).toContain('Ningún contacto tuyo coincide con la búsqueda.');
+  });
+
+  it('?contacto= restaura el contacto seleccionado', async () => {
+    fixture.componentRef.setInput('contacto', 'c2');
+    await fixture.whenStable();
+
+    expect(detalles()).toBe('Bill Gates');
+  });
+
+  it('elegir un contacto deja su id en la dirección', async () => {
+    await seleccionar('propios');
+
+    expect(navegar).toHaveBeenCalledWith(['/mis-contactos'], { queryParams: { contacto: 'c1' } });
+  });
+
+  it('un contacto compartido dice quién lo comparte', async () => {
+    fixture.componentRef.setInput('contactos', [
+      contactoVisibleDePrueba(
+        'lector',
+        { id: 'c9', propietario_id: 'u9', nombre: 'Ada', apellidos: 'Lovelace' },
+        { nombre: 'Invitado', email: 'invitado@jasato.com' },
+      ),
+    ]);
+    await fixture.whenStable();
+
+    await seleccionar('compartidos');
+
+    expect(elemento.querySelector('detalles-contacto')?.textContent).toContain(
+      'Compartido por Invitado',
+    );
   });
 
   it('muestra los detalles del contacto seleccionado, sea de una lista o de la otra', async () => {
@@ -240,7 +299,7 @@ describe('MisContactosComponent', () => {
 
       await clic(accion('Editar'));
 
-      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/contactos', 'c3', 'editar']);
+      expect(navegar).toHaveBeenLastCalledWith(['/contactos', 'c3', 'editar']);
     });
 
     it('«Compartir» lleva a /contactos/:id/compartir', async () => {
@@ -248,7 +307,7 @@ describe('MisContactosComponent', () => {
 
       await clic(accion('Compartir'));
 
-      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/contactos', 'c1', 'compartir']);
+      expect(navegar).toHaveBeenLastCalledWith(['/contactos', 'c1', 'compartir']);
     });
   });
 

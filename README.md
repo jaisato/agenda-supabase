@@ -152,10 +152,16 @@ están en `src/app/app.routes.ts`:
 - `/entrar`, `/registro` y `/auth/recuperar`: solo sin sesión (`sinSesionGuard`).
 - `/auth/confirmar` y `/auth/nueva-contrasena`: destino de los enlaces de los correos
   (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión.
-- `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con la etiqueta del rol, y el detalle
-  del seleccionado), `/nuevo-contacto`, `/contactos/:id/editar` y `/contactos/:id/compartir`:
-  llevan `authGuard`, que sin sesión redirige a `/entrar`.
+- `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con búsqueda, la etiqueta del rol y
+  el detalle del seleccionado; `?contacto=` conserva la selección), `/nuevo-contacto`,
+  `/contactos/:id/editar`, `/contactos/:id/compartir` y `/perfil` (nombre público y cambio de
+  contraseña con la sesión abierta): llevan `authGuard`, que sin sesión redirige a `/entrar`.
 - Cualquier otra ruta redirige a `/mis-contactos`.
+
+En un contacto solo el nombre es obligatorio. Email, teléfono, Facebook y Twitter pueden quedar
+vacíos; el email, si se escribe, tiene que ser válido. Un trigger recorta los extremos antes de
+guardar. En el detalle de un contacto compartido se ve quién lo comparte. `/perfil` escribe
+`perfiles.nombre`, que la barra muestra en lugar del email cuando existe.
 
 `AuthService` expone la sesión como signals; `ContactosService` envuelve las consultas, la RPC y
 las comparticiones con Promesas; `MensajesService` pinta el aviso global y traduce los errores
@@ -495,7 +501,7 @@ unset SUPABASE_SECRET_KEY
   un contacto y, mientras dure esa compartición, ver el `nombre` público de tu perfil y su fecha
   de alta (la política de `perfiles` deja ver el perfil de las contrapartes). Es la misma
   superficie que el aviso anterior, porque el email ya lo conocía quien comparte; `nombre` es un
-  nombre público que cada usuario elige y la aplicación aún no tiene pantalla para ponerlo. Quien
+  nombre público que cada usuario elige en `/perfil`. Quien
   recibe un contacto que no quiere puede dejar de verlo; si no comparten nada más, su perfil deja
   de ser visible para quien se lo compartió.
 - **La cuenta demo es pública.** Cualquiera puede cambiar los datos y la contraseña de

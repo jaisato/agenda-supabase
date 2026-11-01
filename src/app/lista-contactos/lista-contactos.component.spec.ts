@@ -17,9 +17,13 @@ const elon = contacto('c3', 'Elon', 'Musk');
 describe('ListaContactosComponent', () => {
   let fixture: ComponentFixture<ListaContactosComponent>;
   let elemento: HTMLElement;
-  // El nombre de cada <li>, sin la etiqueta del rol.
+  // El nombre de cada fila, sin la etiqueta del rol.
   const nombres = () =>
-    Array.from(elemento.querySelectorAll('li'), (li) => li.firstChild?.textContent?.trim());
+    Array.from(elemento.querySelectorAll('li button.fila'), (boton) => {
+      const rol = boton.querySelector('.rol')?.textContent ?? '';
+      return boton.textContent?.replace(rol, '').trim();
+    });
+  const filas = () => Array.from(elemento.querySelectorAll<HTMLButtonElement>('li button.fila'));
   const roles = () =>
     Array.from(elemento.querySelectorAll('li'), (li) => li.querySelector('.rol')?.textContent);
 
@@ -33,6 +37,9 @@ describe('ListaContactosComponent', () => {
   it('muestra los contactos ordenados alfabéticamente', () => {
     expect(nombres()).toEqual(['Bill Gates', 'Elon Musk', 'Tim Cook']);
     expect(elemento.querySelector('button.icono i')?.className).toBe('fa fa-sort-alpha-desc');
+    expect(elemento.querySelector('button.icono')?.getAttribute('aria-label')).toBe(
+      'Ordenar de la Z a la A',
+    );
   });
 
   it('invierte el orden y el icono al pulsar el botón de ordenación', async () => {
@@ -54,7 +61,7 @@ describe('ListaContactosComponent', () => {
     const seleccionados: ContactoVisible[] = [];
     fixture.componentInstance.contactoSeleccionado.subscribe((c) => seleccionados.push(c));
 
-    elemento.querySelectorAll('li')[1].click();
+    filas()[1].click();
 
     expect(seleccionados).toEqual([elon]);
   });
@@ -81,5 +88,14 @@ describe('ListaContactosComponent', () => {
     const despues = Array.from(elemento.querySelectorAll('li'));
     expect(despues).toHaveLength(antes.length);
     antes.forEach((li, i) => expect(despues[i]).toBe(li));
+  });
+
+  it('marca la fila cuyo id coincide con seleccionadoId y la expone al lector de pantalla', async () => {
+    fixture.componentRef.setInput('seleccionadoId', 'c3');
+    await fixture.whenStable();
+
+    const marcada = filas().find((fila) => fila.classList.contains('seleccionado'));
+    expect(marcada?.textContent).toContain('Elon Musk');
+    expect(marcada?.getAttribute('aria-pressed')).toBe('true');
   });
 });

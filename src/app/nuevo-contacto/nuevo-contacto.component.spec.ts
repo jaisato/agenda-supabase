@@ -81,7 +81,9 @@ describe('NuevoContactoComponent', () => {
         ],
       },
     ]);
-    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], {
+      queryParams: { contacto: 'c1' },
+    });
     expect(mensajes.mensaje()).toBeNull();
   });
 
@@ -110,7 +112,9 @@ describe('NuevoContactoComponent', () => {
     await enviar(tim);
 
     expect(mensajes.mensaje()).toBeNull();
-    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], {
+      queryParams: { contacto: 'c1' },
+    });
   });
 
   it('mientras espera la respuesta no deja enviar otra vez: una doble pulsación no crea dos contactos', async () => {
@@ -128,7 +132,9 @@ describe('NuevoContactoComponent', () => {
 
     terminarAlta(contactoDePrueba(tim));
     await reposar();
-    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos']);
+    expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], {
+      queryParams: { contacto: 'c1' },
+    });
   });
 
   it('con el contacto ya creado, tampoco deja enviar otra vez mientras navega a /mis-contactos', async () => {
