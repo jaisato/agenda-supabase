@@ -9,7 +9,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(79);
+select plan(80);
 
 -- Tipo, tablas y funciones
 select has_schema('privado', 'existe el esquema privado');
@@ -184,12 +184,26 @@ select is_empty(
                   where a.grantee = 0 and a.privilege_type = 'EXECUTE')$$,
   'ninguna función de privado es ejecutable por public');
 
+-- invitaciones_contacto no se publica: Realtime no aplica RLS a los DELETE y difundiría el email
+-- invitado (está en la clave primaria) a cualquier suscriptor.
 select is(
   (select array_agg(tablename order by tablename)
      from pg_publication_tables
     where pubname = 'supabase_realtime' and schemaname = 'public'),
-  array['contactos', 'contactos_compartidos', 'invitaciones_contacto']::name[],
-  'Realtime publica contactos, comparticiones e invitaciones por email');
+  array['contactos', 'contactos_compartidos']::name[],
+  'Realtime publica contactos y comparticiones, no las invitaciones por email');
+
+-- crear_perfil se dispara al crear el usuario y al cambiar email o email_confirmed_at: el canje de
+-- las invitaciones espera a la confirmación (lo prueba 03_compartir.sql).
+select is(
+  (select string_agg(a.attname::text, ',' order by a.attname)
+     from pg_trigger t
+     join pg_attribute a
+       on a.attrelid = t.tgrelid
+      and a.attnum = any (string_to_array(t.tgattr::text, ' ')::int2[])
+    where t.tgrelid = 'auth.users'::regclass and t.tgname = 'crear_perfil'),
+  'email,email_confirmed_at',
+  'crear_perfil se dispara al cambiar email y email_confirmed_at de auth.users');
 
 -- El trigger crear_perfil copia el usuario nuevo de auth.users a perfiles
 select pruebas.crear_usuario('a@test.local');

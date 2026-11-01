@@ -3,7 +3,11 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth/auth.service';
 import { SUPABASE } from './supabase/supabase.client';
 
-const TABLAS = ['contactos', 'contactos_compartidos', 'invitaciones_contacto'] as const;
+// invitaciones_contacto no entra: Realtime no aplica RLS a los DELETE y difunde la clave primaria a
+// todo suscriptor; en estas dos tablas son uuids, allí sería el email invitado. El propietario ve
+// cambiar su lista igual: por sus propias acciones y por el INSERT en contactos_compartidos que
+// produce el canje.
+const TABLAS = ['contactos', 'contactos_compartidos'] as const;
 
 /**
  * Avisa de que alguna tabla de la agenda ha cambiado. Quien escucha vuelve a pedir los datos: el

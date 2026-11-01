@@ -16,7 +16,7 @@ begin;
 -- Silencia el NOTICE de que la extensión pgtap ya existe.
 set client_min_messages to warning;
 create extension if not exists pgtap with schema extensions;
-select plan(67);
+select plan(76);
 
 select pruebas.crear_usuario('a@test.local');
 select pruebas.crear_usuario('b@test.local');
@@ -317,6 +317,43 @@ select results_eq(
   $$select count(*)::int from public.contactos_compartidos
     where usuario_id = pruebas.id_usuario('futuro@test.local')$$,
   array[0], 'el cambio de email no le comparte a A su propio contacto');
+
+-- El canje espera a que el email esté confirmado. GoTrue inserta el usuario antes de que confirme:
+-- si el canje fuera en el insert, quien registrara primero un email ajeno se quedaría sus
+-- invitaciones. A entra ya con su email nuevo (futuro@test.local).
+select pruebas.autenticar('futuro@test.local');
+select lives_ok(
+  $$select public.compartir_contacto(
+      current_setting('prueba.c1')::uuid, 'tarde@test.local', 'lector')$$,
+  'A invita a un email que todavía no tiene cuenta');
+reset role;
+select lives_ok($$select pruebas.crear_usuario('tarde@test.local', false)$$,
+  'ese email se registra sin confirmar');
+select results_eq(
+  $$select email from public.perfiles where email = 'tarde@test.local'$$,
+  array['tarde@test.local'], 'el perfil se crea aunque el email no esté confirmado');
+select results_eq(
+  $$select count(*)::int from public.invitaciones_contacto where email = 'tarde@test.local'$$,
+  array[1], 'la invitación sigue guardada mientras el email no está confirmado');
+select results_eq(
+  $$select count(*)::int from public.contactos_compartidos
+    where usuario_id = pruebas.id_usuario('tarde@test.local')$$,
+  array[0], 'sin confirmar no nace la compartición');
+select lives_ok(
+  $$update auth.users set email_confirmed_at = now()
+    where id = pruebas.id_usuario('tarde@test.local')$$,
+  'GoTrue confirma el email');
+select is_empty($$select * from public.invitaciones_contacto where email = 'tarde@test.local'$$,
+  'al confirmar, la invitación se canjea');
+select results_eq(
+  $$select rol::text, estado::text from public.contactos_compartidos
+    where usuario_id = pruebas.id_usuario('tarde@test.local')$$,
+  $$values ('lector', 'pendiente')$$,
+  'y nace la compartición pendiente con el rol de la invitación');
+select throws_ok(
+  $$select public.compartir_contacto(current_setting('prueba.c1')::uuid, 'a@', 'lector')$$,
+  '22023', 'Escribe un email válido',
+  'un email de dos caracteres lo rechaza la RPC, no el check de la tabla');
 
 -- Un visitante sin sesión no puede ejecutar la RPC ni listar invitaciones. También daría 42501 si
 -- la función llegara a ejecutarse, así que se comprueba el mensaje: es el del privilegio de

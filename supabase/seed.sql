@@ -5,15 +5,17 @@
 -- de la transacción de un test. `auth.uid()` lee las claims del JWT que fijan estas funciones.
 create schema if not exists pruebas;
 
--- Crea un usuario confirmado en auth.users (el trigger privado.crear_perfil crea su perfil) y
--- devuelve su id.
-create or replace function pruebas.crear_usuario(p_email text) returns uuid
+-- Crea un usuario en auth.users (el trigger privado.crear_perfil crea su perfil) y devuelve su
+-- id. Confirmado por defecto; con p_confirmado = false queda como lo deja GoTrue antes de que la
+-- persona abra el enlace del correo (email_confirmed_at nulo).
+create or replace function pruebas.crear_usuario(p_email text, p_confirmado boolean default true)
+returns uuid
 language sql security definer set search_path = '' as $$
   insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at,
                           raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
   values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated',
-          'authenticated', p_email, now(), '{"provider":"email","providers":["email"]}', '{}',
-          now(), now())
+          'authenticated', p_email, case when p_confirmado then now() end,
+          '{"provider":"email","providers":["email"]}', '{}', now(), now())
   returning id;
 $$;
 
@@ -50,5 +52,5 @@ end $$;
 -- Un test cambia de usuario sin `reset role` previo, así que anon y authenticated deben poder
 -- usar el esquema y ejecutar los helpers.
 grant usage on schema pruebas to authenticated, anon;
-grant execute on function pruebas.crear_usuario(text), pruebas.id_usuario(text),
+grant execute on function pruebas.crear_usuario(text, boolean), pruebas.id_usuario(text),
   pruebas.autenticar(text), pruebas.anonimo() to authenticated, anon;
