@@ -205,10 +205,12 @@ están en `src/app/app.routes.ts`:
   `/auth/confirmar` muestra tal cual el `?message=` de GoTrue (el primer enlace del cambio de email
   con confirmación doble) o el `?error_description=` (OAuth cancelado o denegado).
 - `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con búsqueda, la etiqueta del rol y
-  el detalle del seleccionado; `?contacto=` conserva la selección; las invitaciones pendientes se
-  aceptan o se rechazan ahí), `/nuevo-contacto`, `/contactos/:id/editar`,
-  `/contactos/:id/compartir` y `/perfil` (nombre público, avatar, cambio de email y cambio de
-  contraseña con la sesión abierta): llevan `authGuard`, que sin sesión redirige a `/entrar`.
+  el detalle del seleccionado; la selección es `?contacto=`: elegir un contacto, guardarlo tras
+  editar y «Volver» desde compartir lo ponen en la URL, «Atrás» y «Adelante» la recorren y sin el
+  parámetro no hay ninguno abierto; las invitaciones pendientes se aceptan o se rechazan ahí),
+  `/nuevo-contacto`, `/contactos/:id/editar`, `/contactos/:id/compartir` y `/perfil` (nombre
+  público, avatar, cambio de email y cambio de contraseña con la sesión abierta): llevan
+  `authGuard`, que sin sesión redirige a `/entrar`.
 - Cualquier otra ruta redirige a `/mis-contactos`.
 
 En un contacto solo el nombre es obligatorio. Email, teléfono, Facebook y Twitter pueden quedar

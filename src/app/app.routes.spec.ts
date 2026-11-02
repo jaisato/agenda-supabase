@@ -81,6 +81,40 @@ describe('rutas de la aplicación', () => {
       expect(listas[1].querySelector('.rol')?.textContent).toBe('editor');
     });
 
+    // Con el router real: withComponentInputBinding() deja el input a undefined cuando ?contacto=
+    // desaparece, y la pantalla tiene que seguirlo (antes se quedaba el contacto anterior).
+    // «Atrás» y «Adelante» son navegaciones a esas mismas URL y llegan igual al componente; la
+    // navegación falsa de los tests no entrega el popstate al router, así que se navega a ellas.
+    it('/mis-contactos?contacto= es la selección: elegir otro la cambia, volver a una URL anterior la restaura y sin el parámetro no queda ninguno', async () => {
+      hayContactos(filaElon, filaBill);
+      await harness.navigateByUrl('/mis-contactos?contacto=c2', MisContactosComponent);
+      const pantalla = () => harness.routeNativeElement!;
+      const detalle = () => pantalla().querySelector('detalles-contacto h5')?.textContent?.trim();
+      expect(detalle()).toBe('Bill Gates');
+
+      // Elegir a Elon (el primero de «Mis contactos») navega con su id y el detalle lo sigue.
+      pantalla().querySelector<HTMLButtonElement>('lista-contactos button.fila')!.click();
+      await vi.waitFor(() => expect(url()).toBe('/mis-contactos?contacto=c3'));
+      await reposar();
+      expect(detalle()).toBe('Elon Musk');
+
+      // La URL anterior devuelve la selección anterior.
+      await harness.navigateByUrl('/mis-contactos?contacto=c2', MisContactosComponent);
+      await reposar();
+      expect(detalle()).toBe('Bill Gates');
+
+      // Sin el parámetro, la lista se queda sin ninguno abierto.
+      await harness.navigateByUrl('/mis-contactos', MisContactosComponent);
+      await reposar();
+      expect(detalle()).toBeUndefined();
+      expect(pantalla().querySelector('detalles-contacto')?.textContent).toContain(
+        'Selecciona un contacto para ver sus datos.',
+      );
+      // Solo ha cambiado la query: el componente es el mismo y el resolver no ha vuelto a pedir
+      // los contactos.
+      expect(falso.consultas.map((consulta) => consulta.tabla)).toEqual(['contactos']);
+    });
+
     it('/nuevo-contacto muestra el formulario de alta', async () => {
       await harness.navigateByUrl('/nuevo-contacto', NuevoContactoComponent);
 
