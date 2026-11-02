@@ -34,7 +34,9 @@ export class MisContactosComponent {
   // Datos del resolver de la ruta (contactosResolver), que withComponentInputBinding()
   // entrega como input.
   readonly contactos = input.required<ContactoVisible[]>();
-  // Query ?contacto=: el id sobrevive a recargar y a volver de editar o compartir.
+  // Query ?contacto=: la selección vive en la URL. Elegir un contacto navega con ella, así que
+  // sobrevive a recargar y a volver de editar o compartir, y «Atrás», «Adelante» o un enlace sin
+  // el parámetro la cambian o la quitan.
   readonly contacto = input<string>();
 
   // Sin zone.js, lo que se asigna tras un await no se repinta salvo que sea un signal. La lista
@@ -54,7 +56,13 @@ export class MisContactosComponent {
   protected readonly compartidosVisibles = computed(() =>
     this.compartidos().filter((c) => this.coincide(c)),
   );
-  protected readonly seleccionado = signal<ContactoVisible | null>(null);
+  // El contacto abierto sale de la URL y de la lista, sin copia aparte: sin ?contacto= no hay
+  // ninguno (antes se quedaba el anterior al volver atrás o seguir un enlace sin la query), y al
+  // recargar la lista se ve la fila nueva del mismo id o, si ya no está, ninguna.
+  protected readonly seleccionado = computed(() => {
+    const id = this.contacto();
+    return id ? (this.lista().find((c) => c.id === id) ?? null) : null;
+  });
   protected readonly invitaciones = signal<InvitacionPendiente[]>([]);
 
   constructor() {
@@ -76,14 +84,6 @@ export class MisContactosComponent {
         return;
       }
       void this.recargar();
-    });
-
-    effect(() => {
-      const id = this.contacto();
-      if (!id) {
-        return;
-      }
-      this.seleccionado.set(this.lista().find((c) => c.id === id) ?? null);
     });
 
     void this.cargarInvitaciones();
@@ -169,8 +169,8 @@ export class MisContactosComponent {
     this._mensajes.exito('Invitación rechazada');
   }
 
+  // Solo navega: el detalle cambia cuando el router entrega ?contacto= (ver seleccionado).
   verDetallesContacto(contacto: ContactoVisible): void {
-    this.seleccionado.set(contacto);
     void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: contacto.id } });
   }
 
@@ -181,10 +181,10 @@ export class MisContactosComponent {
     window.open(ruta, '_blank', 'noopener,noreferrer');
   }
 
-  // El contacto ya no se ve (borrado o dejado de ver): fuera de la lista y de los detalles.
-  // Mientras esperaba la respuesta, puede haberse seleccionado otro contacto.
+  // El contacto ya no se ve (borrado o dejado de ver): fuera de la lista, con lo que deja de estar
+  // seleccionado, y fuera de la URL si seguía abierto. Si mientras esperaba la respuesta se ha
+  // elegido otro, la URL ya apunta a ese y no se toca.
   private quitarDeLasListas(contacto: ContactoVisible): void {
-    this.seleccionado.update((actual) => (actual?.id === contacto.id ? null : actual));
     this.lista.update((contactos) => contactos.filter((c) => c.id !== contacto.id));
     if (this.contacto() === contacto.id) {
       void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
@@ -209,16 +209,12 @@ export class MisContactosComponent {
     await this.cargarInvitaciones();
   }
 
-  // La lista nueva sustituye a la del resolver. Si el contacto abierto ya no está, se quita de la URL.
+  // La lista nueva sustituye a la del resolver y seleccionado se recalcula con ella. Si el contacto
+  // abierto ya no está, se quita también de la URL.
   private aplicarLista(contactos: ContactoVisible[]): void {
+    const abierto = this.seleccionado()?.id;
     this.lista.set(contactos);
-    const id = this.seleccionado()?.id;
-    if (!id) {
-      return;
-    }
-    const siguiente = contactos.find((c) => c.id === id) ?? null;
-    this.seleccionado.set(siguiente);
-    if (!siguiente && this.contacto() === id) {
+    if (abierto && !this.seleccionado()) {
       void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
     }
   }

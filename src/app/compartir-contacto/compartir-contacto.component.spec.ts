@@ -181,7 +181,7 @@ describe('CompartirContactoComponent', () => {
       ]);
     });
 
-    it('pinta de qué contacto se trata, el formulario con el rol «lector» elegido y el enlace «Volver» a /mis-contactos', async () => {
+    it('pinta de qué contacto se trata, el formulario con el rol «lector» elegido y el enlace «Volver» a /mis-contactos con el contacto abierto', async () => {
       await abrir(propio);
 
       expect(elemento.querySelector('h5')?.textContent?.trim()).toBe('Tim Cook');
@@ -197,7 +197,7 @@ describe('CompartirContactoComponent', () => {
       const volver = Array.from(elemento.querySelectorAll('a')).find(
         (a) => a.textContent?.trim() === 'Volver',
       );
-      expect(volver?.getAttribute('href')).toBe('/mis-contactos');
+      expect(volver?.getAttribute('href')).toBe('/mis-contactos?contacto=c1');
     });
 
     it('ordena a las personas por email, venga como venga de la base de datos', async () => {

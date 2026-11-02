@@ -121,7 +121,8 @@
         }
       }
 
-      <a routerLink="/mis-contactos">Volver</a>
+      <!-- Con ?contacto=, como al guardar un contacto editado: la lista vuelve con este abierto -->
+      <a routerLink="/mis-contactos" [queryParams]="{ contacto: suyo.id }">Volver</a>
     </div>
   </div>
 }

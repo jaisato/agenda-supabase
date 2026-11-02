@@ -97,7 +97,17 @@ describe('MisContactosComponent', () => {
       providers: [provideRouter([]), { provide: SUPABASE, useValue: falso.cliente }],
     });
     mensajes = TestBed.inject(MensajesService);
-    navegar = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    // Como withComponentInputBinding() en la aplicación: navegar a /mis-contactos con ?contacto=
+    // entrega el parámetro al input (null lo quita). Los demás destinos no tocan el componente.
+    navegar = vi
+      .spyOn(TestBed.inject(Router), 'navigate')
+      .mockImplementation(async (comandos, extras) => {
+        const query = extras?.queryParams;
+        if (comandos[0] === '/mis-contactos' && query && 'contacto' in query) {
+          fixture.componentRef.setInput('contacto', query['contacto'] ?? undefined);
+        }
+        return true;
+      });
     fixture = TestBed.createComponent(MisContactosComponent);
     elemento = fixture.nativeElement;
     // Lo que en la aplicación entrega el resolver vía withComponentInputBinding().
@@ -165,6 +175,72 @@ describe('MisContactosComponent', () => {
     await seleccionar('propios');
 
     expect(navegar).toHaveBeenCalledWith(['/mis-contactos'], { queryParams: { contacto: 'c1' } });
+  });
+
+  describe('la selección sale de ?contacto=', () => {
+    const recargarCon = async (contactos: (typeof tim)[]) => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'obtenerContactos').mockResolvedValue(contactos);
+      vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
+      // Volver a la pestaña recarga la lista, igual que un aviso de Realtime.
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+    };
+
+    // El hallazgo: el contacto anterior seguía abierto al volver atrás o seguir un enlace sin la
+    // query, porque solo se miraba el parámetro cuando traía un id.
+    it('con el parámetro se selecciona y, al quitarlo (atrás, un enlace sin query), no queda ninguno', async () => {
+      fixture.componentRef.setInput('contacto', 'c2');
+      await fixture.whenStable();
+      expect(detalles()).toBe('Bill Gates');
+
+      fixture.componentRef.setInput('contacto', undefined);
+      await fixture.whenStable();
+
+      expect(detalles()).toBeUndefined();
+      expect(acciones()).toEqual([]);
+      expect(elemento.querySelector('detalles-contacto')?.textContent).toContain(
+        'Selecciona un contacto para ver sus datos.',
+      );
+      expect(elemento.querySelector('button.fila.seleccionado')).toBeNull();
+    });
+
+    it('elegir un contacto solo navega: el detalle cambia cuando llega el parámetro', async () => {
+      navegar.mockResolvedValue(true);
+
+      await seleccionar('propios');
+
+      expect(navegar).toHaveBeenCalledWith(['/mis-contactos'], { queryParams: { contacto: 'c1' } });
+      expect(detalles()).toBeUndefined();
+
+      fixture.componentRef.setInput('contacto', 'c1');
+      await fixture.whenStable();
+
+      expect(detalles()).toBe('Tim Cook');
+    });
+
+    it('al recargar la lista con el parámetro, la selección se mantiene con los datos nuevos', async () => {
+      fixture.componentRef.setInput('contacto', 'c2');
+      await fixture.whenStable();
+
+      await recargarCon([tim, { ...bill, telefono: '555-000111' }, elon]);
+
+      expect(detalles()).toBe('Bill Gates');
+      expect(elemento.querySelector('detalles-contacto')?.textContent).toContain('555-000111');
+      expect(navegar).not.toHaveBeenCalled();
+    });
+
+    it('si al recargar el contacto abierto ya no está, no queda ninguno y se quita de la URL', async () => {
+      fixture.componentRef.setInput('contacto', 'c2');
+      await fixture.whenStable();
+
+      await recargarCon([tim, elon]);
+
+      expect(detalles()).toBeUndefined();
+      expect(navegar).toHaveBeenCalledExactlyOnceWith(['/mis-contactos'], {
+        queryParams: { contacto: null },
+      });
+    });
   });
 
   it('un contacto compartido dice quién lo comparte', async () => {
