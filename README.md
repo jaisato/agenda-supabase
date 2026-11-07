@@ -467,10 +467,14 @@ ejecuta con dos jobs encadenados:
    `SUPABASE_PROJECT_REF` llegan solo a ese paso. El job solo tiene permiso de lectura sobre el
    repositorio (los de Pages son del job siguiente) y un límite de 15 minutos.
 2. **`pages`** (`needs: migraciones`: si las migraciones fallan, el frontend no se publica):
-   `npm run build:pages`, copia de `index.html` a `404.html` y despliegue en Pages
-   (`configure-pages`, `upload-pages-artifact` y `deploy-pages`). La copia sirve para que los
-   enlaces profundos —los de los correos, como `/auth/confirmar?code=…`— arranquen la SPA: GitHub
-   Pages sirve `404.html` en las rutas que no existen como fichero.
+   `npm run build:pages` con `--define "__SENTRY_RELEASE__='agenda-supabase@<sha>'"` (la release
+   con la que Sentry etiqueta los eventos de ese despliegue), subida de los source maps a Sentry
+   (`sentry-cli sourcemaps inject` y `upload`; se saltan con un aviso si falta
+   `SENTRY_AUTH_TOKEN`) y borrado de los `.map` para no publicarlos, copia de `index.html` a
+   `404.html` y despliegue en Pages (`configure-pages`, `upload-pages-artifact` y `deploy-pages`).
+   La copia sirve para que los enlaces profundos —los de los correos, como
+   `/auth/confirmar?code=…`— arranquen la SPA: GitHub Pages sirve `404.html` en las rutas que no
+   existen como fichero.
 
 Solo hay un despliegue a la vez y no se cancela el que está en marcha (`concurrency: deploy`):
 cancelar a mitad de un `db push` dejaría las migraciones a medias. Las acciones están fijadas por
@@ -492,6 +496,7 @@ pasado el CI.
   gh secret set SUPABASE_ACCESS_TOKEN
   gh secret set SUPABASE_DB_PASSWORD
   gh variable set SUPABASE_PROJECT_REF --body zckmejrnscenxwiqykkh
+  gh secret set SENTRY_AUTH_TOKEN   # token de Sentry con alcance project:releases, para los source maps
   ```
 
 - Protección de `master`: PR obligatoria, checks requeridos «Build, tests y npm audit» y «Base de
@@ -541,6 +546,11 @@ pasado el CI.
   y con caducidad.
 - `SUPABASE_DB_PASSWORD`: secreto de GitHub. Contraseña de la base de datos del proyecto.
 - `SUPABASE_PROJECT_REF`: variable de GitHub. Referencia del proyecto; no es secreta.
+- DSN de Sentry: en el repositorio (`src/environments/environment*.ts`). Es una clave pública de
+  cliente, como la publishable key: solo sirve para enviar eventos al proyecto.
+- `SENTRY_AUTH_TOKEN`: secreto de GitHub. Token de Sentry (Settings → Auth Tokens, alcance
+  `project:releases`) que `deploy.yml` usa solo para subir los source maps. Sin él, el despliegue
+  avisa y publica igual; los errores llegan a Sentry, pero sobre el JS minificado.
 - Contraseña SMTP: solo en el dashboard de Supabase. Es una API key de Resend de solo envío y
   limitada al dominio `jasato.com`.
 - Clave secreta de Supabase: solo en el entorno de quien ejecuta `seed:demo`.
@@ -595,6 +605,27 @@ read -rs SUPABASE_SECRET_KEY && export SUPABASE_SECRET_KEY   # pega la clave y p
 SUPABASE_URL=https://zckmejrnscenxwiqykkh.supabase.co npm run seed:demo
 unset SUPABASE_SECRET_KEY
 ```
+
+### Errores en producción (Sentry)
+
+La aplicación envía sus errores y trazas al proyecto `agenda-supabase` de la organización
+`alten-xy` de Sentry ([`@sentry/angular`](https://docs.sentry.io/platforms/javascript/guides/angular/);
+`Sentry.init` en `src/main.ts`, `ErrorHandler` y `TraceService` en `app.config.ts`). Qué llega:
+
+- Los errores no controlados: los que alcanzan el `ErrorHandler` de Angular y los que escapan a
+  `window.onerror` o quedan como promesas rechazadas. Los que la aplicación ya trata (por ejemplo,
+  los avisos de `MensajesService`) no se envían.
+- Trazas de la carga de la página y de cada navegación del router, con las peticiones a Supabase
+  como spans: una de cada cinco sesiones en producción, todas en desarrollo
+  (`environment.sentry.tracesSampleRate`). Las cabeceras de traza no se añaden a las peticiones a
+  Supabase, que es otro origen.
+- Etiquetas `environment` (`production` o `development`) y `release` (`agenda-supabase@<sha>` en
+  cada despliegue), con la IP y el navegador de quien lo sufre. Para no enviar la IP, añade
+  `dataCollection: { userInfo: false }` a `Sentry.init`.
+
+El desarrollo local usa el mismo proyecto con `environment: development`; con `dsn: ''` en
+`environment.development.ts` el SDK no envía nada. Las trazas de producción se leen gracias a los
+source maps ocultos que sube `deploy.yml` (ver «Despliegue»).
 
 ### Incidencias y rotaciones
 
