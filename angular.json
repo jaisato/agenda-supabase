@@ -42,6 +42,9 @@
           "builder": "@angular/build:application",
           "options": {
             "browser": "src/main.ts",
+            "define": {
+              "__SENTRY_RELEASE__": "undefined"
+            },
             "tsConfig": "tsconfig.app.json",
             "assets": [
               {
@@ -61,7 +64,7 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "700kB",
+                  "maximumWarning": "900kB",
                   "maximumError": "1.2MB"
                 },
                 {
@@ -70,7 +73,13 @@
                   "maximumError": "8kB"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "sourceMap": {
+                "scripts": true,
+                "styles": false,
+                "vendor": false,
+                "hidden": true
+              }
             },
             "development": {
               "optimization": false,

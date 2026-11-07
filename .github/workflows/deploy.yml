@@ -74,7 +74,33 @@ jobs:
       - run: npm ci
 
       # Build de producción con base href /agenda-supabase/ (la app vive en una subruta de Pages).
-      - run: npm run build:pages
+      # __SENTRY_RELEASE__ etiqueta cada evento de Sentry con el commit desplegado (angular.json lo
+      # deja sin valor en los builds locales). El build emite source maps ocultos (sin comentario
+      # sourceMappingURL): se suben a Sentry en el paso siguiente y se borran antes de publicar.
+      - name: Build de producción
+        env:
+          SENTRY_RELEASE: agenda-supabase@${{ github.sha }}
+        run: npm run build:pages -- --define "__SENTRY_RELEASE__='$SENTRY_RELEASE'"
+
+      # Sin source maps, Sentry mostraría los errores de producción sobre el JS minificado. inject
+      # escribe un Debug ID en cada fichero y su mapa, upload los sube asociados a la release. Hace
+      # falta un token de Sentry con alcance project:releases en el secreto SENTRY_AUTH_TOKEN; sin
+      # él se avisa y se publica igual (los errores llegan, pero con las trazas minificadas).
+      - name: Subir los source maps a Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_URL: https://de.sentry.io
+          SENTRY_ORG: alten-xy
+          SENTRY_PROJECT: agenda-supabase
+          SENTRY_RELEASE: agenda-supabase@${{ github.sha }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::warning::SENTRY_AUTH_TOKEN no está definido: no se suben los source maps a Sentry"
+          else
+            npx sentry-cli sourcemaps inject dist/agenda/browser
+            npx sentry-cli sourcemaps upload --release "$SENTRY_RELEASE" dist/agenda/browser
+          fi
+          find dist/agenda/browser -name '*.map' -delete
 
       # GitHub Pages sirve 404.html en las rutas que no existen como fichero. Con una copia de
       # index.html, los enlaces profundos (como /auth/confirmar?code=… del correo) arrancan la SPA.

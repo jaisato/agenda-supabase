@@ -10,4 +10,12 @@ export const environment = {
   // apagado, signInWithOAuth no devuelve error, redirige a un JSON de error de GoTrue. Al
   // activarlos, añadir aquí 'google' o 'github' y los botones aparecen.
   oauthProveedores: [] as Array<'google' | 'github'>,
+  // Sentry (proyecto alten-xy/agenda-supabase). El DSN es una clave pública de cliente, como la de
+  // Supabase: solo sirve para enviar eventos. Sin DSN el SDK no arranca.
+  sentry: {
+    dsn: 'https://39614323e4644643d3725bdabd73281e@o4512305721376768.ingest.de.sentry.io/4512390926434384',
+    environment: 'production',
+    // Trazas de carga y navegación: una de cada cinco sesiones basta para ver tiempos reales.
+    tracesSampleRate: 0.2,
+  },
 };
