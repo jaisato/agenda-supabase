@@ -58,8 +58,8 @@ jobs:
 
       - run: npm ci
 
-      # Sin los servicios que la agenda no usa (Realtime, Storage, Edge Functions, logs ni
-      # Studio): arranca antes y gasta menos memoria.
+      # pgTAP solo necesita Postgres. Realtime, Storage y el resto existen como esquema; sus
+      # contenedores no hacen falta y el arranque gasta menos memoria.
       - run: npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio
 
       # Aplica las migraciones y supabase/seed.sql sobre una base limpia.
@@ -72,3 +72,36 @@ jobs:
 
       # database.types.ts es un fichero generado: si el esquema cambia y el fichero no, el diff falla.
       - run: npx supabase gen types --lang typescript -s public > src/app/supabase/database.types.ts && git diff --exit-code -- src/app/supabase/database.types.ts
+
+  # Entra con la cuenta demo y comprueba que la lista pinta un contacto. El stack es el mismo que
+  # el de «Base de datos»: Auth y la Data API sí arrancan; Realtime y Storage no hacen falta aquí.
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NG_CLI_ANALYTICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio
+
+      - run: npx supabase db reset
+
+      - name: Sembrar la demo
+        run: |
+          eval "$(npx supabase status -o env | grep -E '^(API_URL|SERVICE_ROLE_KEY|SECRET_KEY)=')"
+          SUPABASE_URL="$API_URL" SUPABASE_SECRET_KEY="${SECRET_KEY:-$SERVICE_ROLE_KEY}" npm run seed:demo
+
+      - run: npm run e2e

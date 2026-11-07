@@ -39,7 +39,7 @@ export interface SupabaseFalso {
   readonly consultas: ConsultaFalsa[];
   /** Simula un evento de `onAuthStateChange` (avisa a todos los suscriptores). */
   emitirAuth(evento: AuthChangeEvent, sesion: Session | null): void;
-  /** Dispara los callbacks de `postgres_changes` registrados en los canales. */
+  /** Dispara los callbacks de broadcast registrados en los canales. */
   emitirTiempoReal(): void;
   /** Respuesta de las consultas a `from(tabla)`; sin configurar, `{ data: null, error: null }`. */
   respuestaDe(tabla: string, respuesta: RespuestaFalsa): void;
@@ -165,6 +165,7 @@ export function crearSupabaseFalso(): SupabaseFalso {
     return canal;
   });
   const removeChannel = vi.fn(async () => 'ok');
+  const setAuth = vi.fn(async () => undefined);
 
   return {
     cliente: {
@@ -174,6 +175,7 @@ export function crearSupabaseFalso(): SupabaseFalso {
       storage,
       channel,
       removeChannel,
+      realtime: { setAuth },
     } as unknown as SupabaseClient<Database>,
     auth,
     storage: { upload, remove, createSignedUrl },

@@ -219,15 +219,14 @@ guardar. En el detalle de un contacto compartido se ve quién lo comparte, con s
 `/perfil` escribe `perfiles.nombre` y `perfiles.avatar_ruta`. La barra muestra el nombre en lugar
 del email cuando existe, y el avatar junto a él. El cambio de email lo confirma GoTrue en las dos
 bandejas; la pantalla no sustituye el email hasta que el perfil se vuelve a leer. La lista y la
-pantalla de compartir se vuelven a pedir cuando Realtime avisa de un cambio en `contactos` o
-`contactos_compartidos`, y también al volver a la pestaña. El canal se llama `agenda-<id>`: el
-cliente no parchea filas, vuelve a consultar. Realtime aplica la RLS a los INSERT y UPDATE, pero no
-a los DELETE: de esos difunde la clave primaria a todos los suscriptores, que en estas dos tablas
-son uuids. `invitaciones_contacto` lleva el email en la clave y por eso no se publica; el
-propietario la ve cambiar igual (por sus propias acciones y por el INSERT en `contactos_compartidos`
-que produce el canje). Mejora futura: Broadcast desde la base (`realtime.broadcast_changes` a un
-canal privado `agenda:<id>` con una política sobre `realtime.messages`), que entrega cada cambio
-solo a sus interesados y no necesita la publicación.
+pantalla de compartir se vuelven a pedir cuando llega un Broadcast y también al volver a la
+pestaña. El canal es privado y se llama `agenda:<id>`: la base llama a
+`realtime.broadcast_changes` y la política de `realtime.messages` solo deja suscribirse a ese
+usuario. El cliente no parchea filas, vuelve a consultar. Un cambio de contacto lo oyen el
+propietario y quien ya lo tiene aceptado. La invitación (la fila de `contactos_compartidos`) la
+oyen el destinatario y el propietario en cuanto se crea. La invitación por email solo la oye el
+propietario: el payload lleva el email y no sale de su canal. Ninguna tabla de la agenda está en
+la publicación `supabase_realtime`.
 
 `AuthService` expone la sesión como signals; `ContactosService` envuelve las consultas, la RPC y
 las comparticiones con Promesas; `MensajesService` pinta el aviso global y traduce los errores
@@ -307,29 +306,30 @@ borra también la demo, así que vuelve a lanzar `seed:demo`.
 
 ## Scripts
 
-| Script                      | Qué hace                                                           |
-| --------------------------- | ------------------------------------------------------------------ |
-| `npm start`                 | `ng serve` en <http://localhost:4200>, con el stack local.         |
-| `npm run build`             | Build de producción en `dist/agenda/browser/` (proyecto real).     |
-| `npm run build:pages`       | Igual, con `--base-href /agenda-supabase/` (lo que publica Pages). |
-| `npm run watch`             | `ng build --watch` con la configuración de desarrollo.             |
-| `npm test`                  | Vitest en modo _watch_ (en una terminal).                          |
-| `npm test -- --watch=false` | Una sola pasada (lo que ejecuta el CI).                            |
-| `npm run seed:demo`         | Crea o repone las cuentas y los datos sembrados de la demo.        |
-| `npm run ng -- <comando>`   | La CLI de Angular.                                                 |
+| Script                      | Qué hace                                                            |
+| --------------------------- | ------------------------------------------------------------------- |
+| `npm start`                 | `ng serve` en <http://localhost:4200>, con el stack local.          |
+| `npm run build`             | Build de producción en `dist/agenda/browser/` (proyecto real).      |
+| `npm run build:pages`       | Igual, con `--base-href /agenda-supabase/` (lo que publica Pages).  |
+| `npm run watch`             | `ng build --watch` con la configuración de desarrollo.              |
+| `npm test`                  | Vitest en modo _watch_ (en una terminal).                           |
+| `npm test -- --watch=false` | Una sola pasada (lo que ejecuta el CI).                             |
+| `npm run seed:demo`         | Crea o repone las cuentas y los datos sembrados de la demo.         |
+| `npm run e2e`               | Playwright contra la demo local (stack y `seed:demo` ya en marcha). |
+| `npm run ng -- <comando>`   | La CLI de Angular.                                                  |
 
 La CLI de Supabase se invoca siempre como `npx supabase`:
 
-| Comando                                                      | Qué hace                                              |
-| ------------------------------------------------------------ | ----------------------------------------------------- |
-| `npx supabase start` / `npx supabase stop`                   | Arranca o para el stack local.                        |
-| `npx supabase status -o env`                                 | URLs y claves del stack local, como `NOMBRE="valor"`. |
-| `npx supabase db reset`                                      | Base local limpia: migraciones y `supabase/seed.sql`. |
-| `npx supabase migration new <nombre>`                        | Crea una migración vacía.                             |
-| `npx supabase migration up`                                  | Aplica las migraciones pendientes, sin borrar datos.  |
-| `npx supabase test db [fichero]`                             | Tests pgTAP.                                          |
-| `npx supabase db lint --local --fail-on warning`             | Lint del esquema; falla con cualquier aviso.          |
-| `npx supabase gen types --local --lang typescript -s public` | Tipos de TypeScript del esquema `public`.             |
+| Comando                                              | Qué hace                                              |
+| ---------------------------------------------------- | ----------------------------------------------------- |
+| `npx supabase start` / `npx supabase stop`           | Arranca o para el stack local.                        |
+| `npx supabase status -o env`                         | URLs y claves del stack local, como `NOMBRE="valor"`. |
+| `npx supabase db reset`                              | Base local limpia: migraciones y `supabase/seed.sql`. |
+| `npx supabase migration new <nombre>`                | Crea una migración vacía.                             |
+| `npx supabase migration up`                          | Aplica las migraciones pendientes, sin borrar datos.  |
+| `npx supabase test db [fichero]`                     | Tests pgTAP.                                          |
+| `npx supabase db lint --fail-on warning`             | Lint del esquema local; falla con cualquier aviso.    |
+| `npx supabase gen types --lang typescript -s public` | Tipos de TypeScript del esquema `public` local.       |
 
 ## Tests
 
@@ -360,9 +360,9 @@ locales y nunca se despliegan.
   solo para `authenticated`; los privilegios exactos (`anon` sin ninguno, `authenticated` con
   `insert` y `update` solo en las columnas de datos, y `update` de `perfiles` solo en `nombre` y
   `avatar_ruta`); el `EXECUTE` de las funciones de `privado`, y que ninguna sea ejecutable por
-  `public`; las dos tablas de la publicación `supabase_realtime` (`invitaciones_contacto` queda
-  fuera a propósito), las columnas de `auth.users` que disparan `crear_perfil`, y que la RPC y el
-  canje toman el mismo advisory lock por email.
+  `public`; ninguna tabla de `public` en la publicación `supabase_realtime`, las columnas de
+  `auth.users` que disparan `crear_perfil`, y que la RPC y el canje toman el mismo advisory lock
+  por email.
 - `02_contactos.sql`: cada usuario ve y toca solo lo suyo (otro usuario no ve, edita ni borra sus
   contactos); insertar un contacto a nombre de otro falla con `42501`; semántica de lector y
   editor; borrar un contacto borra sus comparticiones; `anon` no lee.
@@ -387,6 +387,10 @@ locales y nunca se despliegan.
   `avatar.jpg`, `.png` o `.webp`; lo lee él y una contraparte, también con la compartición
   pendiente; un tercero y `anon` no. El `delete` directo sobre `storage.objects` lo impide
   `storage.protect_delete()`: el test comprueba el nombre de la política, no el borrado por SQL.
+- `06_broadcast.sql`: un cambio avisa por el canal privado `agenda:<usuario>`. El propietario lo
+  oye; el destinatario oye la invitación enseguida y los datos del contacto solo cuando ya está
+  aceptada; la invitación por email no la oye nadie más; un usuario no inserta en
+  `realtime.messages`.
 
 **Sin sesión no se ve nada.** Con el stack local en marcha:
 
@@ -401,8 +405,8 @@ no tiene ningún privilegio. Contra producción es lo mismo con la URL y la publ
 
 ### CI
 
-[`ci.yml`](.github/workflows/ci.yml) corre en cada PR y en los push a `master`, con dos jobs en
-paralelo. Son los dos checks que exige la protección de `master`.
+[`ci.yml`](.github/workflows/ci.yml) corre en cada PR y en los push a `master`, con tres jobs en
+paralelo. La protección de `master` exige «Build, tests y npm audit» y «Base de datos».
 
 - **«Build, tests y npm audit»**: `npm ci`, `npx ng build`, `npx ng test --watch=false` y
   `npm audit --audit-level=low`.
@@ -410,12 +414,16 @@ paralelo. Son los dos checks que exige la protección de `master`.
   edge-runtime, logflare, vector, supavisor y Studio
   (`npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,supavisor,studio`).
   El esquema de Storage y la publicación `supabase_realtime` viven en Postgres, así que pgTAP
-  comprueba las políticas del bucket y la pertenencia a la publicación sin esas APIs. Después
+  comprueba las políticas del bucket y que la agenda ya no publica tablas, sin esas APIs. Después
   ejecuta `npx supabase db reset`, `npx supabase test db`,
-  `npx supabase db lint --local --fail-on warning` y la comprobación de que
+  `npx supabase db lint --fail-on warning` y la comprobación de que
   `src/app/supabase/database.types.ts` coincide con el esquema (`gen types` seguido de
   `git diff --exit-code`). Tiene un límite de 15 minutos: un arranque colgado no ocupa el runner
   las 6 horas que GitHub da por defecto a un job.
+- **«E2E»**: arranca el mismo stack reducido, siembra la demo y corre Playwright
+  (`npm run e2e`) contra `ng serve`. Cubre el acceso de `demo@jasato.com` y que la lista muestra
+  Tim Cook. El captcha local usa la clave de prueba de hCaptcha, que pasa sola. Límite de 20
+  minutos.
 
 ## Migraciones
 
@@ -428,8 +436,8 @@ npx supabase migration new <nombre>   # crea supabase/migrations/<timestamp>_<no
 # …escribe el SQL y los tests pgTAP que lo cubren…
 npx supabase db reset                 # lo aplica todo desde cero, como el CI
 npx supabase test db
-npx supabase db lint --local --fail-on warning
-npx supabase gen types --local --lang typescript -s public > src/app/supabase/database.types.ts
+npx supabase db lint --fail-on warning
+npx supabase gen types --lang typescript -s public > src/app/supabase/database.types.ts
 ```
 
 `npx supabase migration up` aplica solo la nueva, sin borrar los datos locales. `database.types.ts`
@@ -459,7 +467,7 @@ ejecuta con dos jobs encadenados:
 
 1. **`migraciones`**: `npm ci` y, en un solo paso,
    `npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --yes` y
-   `npx supabase db push --linked --yes` (`--yes` contesta a las preguntas de la CLI, como la
+   `npx supabase db push --remote --yes` (`--yes` contesta a las preguntas de la CLI, como la
    confirmación de las migraciones que se van a aplicar: en CI no hay nadie que las conteste).
    `db push` aplica solo las migraciones pendientes de `supabase/migrations` (si no hay ninguna, no
    hace nada) y no ejecuta `supabase/seed.sql`, así que los helpers `pruebas.*` no llegan a
@@ -527,10 +535,9 @@ pasado el CI.
 - El bucket `avatares` lo crea la migración (privado, 1 MB, JPEG, PNG o WebP). No hace falta
   crearlo en el dashboard; si ya existiera, la migración le pone esos límites en vez de fallar.
   Las URLs que ve el navegador son firmadas.
-- Realtime: la migración añade `contactos` y `contactos_compartidos` a la publicación
-  `supabase_realtime` si no están ya (activarlas antes desde el dashboard no la rompe).
-  `invitaciones_contacto` no se publica: su clave lleva el email y Realtime no filtra los DELETE
-  por RLS. En el proyecto alojado esa publicación llega con `db push`.
+- Realtime: no hay que activar tablas en la publicación del dashboard. La migración las quita de
+  `supabase_realtime` y avisa por Broadcast privado. En el proyecto alojado eso llega con
+  `db push`. Hace falta el servicio Realtime del proyecto (viene activo en el plan Free).
 
 **Dónde vive cada clave**
 
@@ -647,13 +654,15 @@ unset SUPABASE_SECRET_KEY
 - **`seed:demo` solo gestiona usuarios creados por GoTrue**, no insertados a mano por SQL en
   `auth.users`: GoTrue no sabe listar esas filas y `seed:demo` falla con «Database error finding
   users». Los tests pgTAP los insertan a mano, pero dentro de transacciones que se deshacen.
-- **Alcance.** OAuth (Google y GitHub), CAPTCHA, cambio de email, avatares, Realtime e
-  invitaciones a quien no tiene cuenta están en la aplicación. En el proyecto alojado, OAuth sigue
-  apagado (y sus botones ocultos: `oauthProveedores` va vacío) y CAPTCHA no se activa: sin los
-  secretos del dashboard la demo pública no debe dejar de aceptar email y contraseña. La site key de
-  producción va vacía. En local, CAPTCHA usa las claves de prueba de hCaptcha y OAuth está declarado
-  pero `enabled = false`. Fuera de alcance: pruebas E2E en un navegador y el Broadcast por usuario
-  de Realtime. El registro está abierto.
+- **Alcance.** OAuth (Google y GitHub), CAPTCHA, cambio de email, avatares, Realtime (Broadcast
+  privado por usuario), invitaciones a quien no tiene cuenta y una prueba E2E del acceso a la demo
+  están en la aplicación. En el proyecto alojado, OAuth sigue apagado (y sus botones ocultos:
+  `oauthProveedores` va vacío) y CAPTCHA no se activa: sin los secretos del dashboard la demo
+  pública no debe dejar de aceptar email y contraseña. La site key de producción va vacía. En
+  local, CAPTCHA usa las claves de prueba de hCaptcha y OAuth está declarado pero `enabled = false`.
+  Encender Google o GitHub en el dashboard es un paso manual: hacen falta el client id y el secreto
+  de cada consola, que no están en el repositorio, y después añadir el proveedor a
+  `environment.oauthProveedores`. El registro está abierto.
 
 ## Estructura del repositorio
 
