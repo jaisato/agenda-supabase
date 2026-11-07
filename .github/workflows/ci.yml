@@ -68,7 +68,7 @@ jobs:
       # pgTAP: supabase/tests/*.sql.
       - run: npx supabase test db
 
-      - run: npx supabase db lint --local --fail-on warning
+      - run: npx supabase db lint --fail-on warning
 
       # database.types.ts es un fichero generado: si el esquema cambia y el fichero no, el diff falla.
-      - run: npx supabase gen types --local --lang typescript -s public > src/app/supabase/database.types.ts && git diff --exit-code -- src/app/supabase/database.types.ts
+      - run: npx supabase gen types --lang typescript -s public > src/app/supabase/database.types.ts && git diff --exit-code -- src/app/supabase/database.types.ts
