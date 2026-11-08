@@ -519,6 +519,83 @@ describe('MisContactosComponent', () => {
     });
   });
 
+  describe('recargas que contestan en otro orden', () => {
+    // Una respuesta que se entrega a mano, para contestar las peticiones en el orden que convenga.
+    const diferida = <T>() => {
+      let resolver!: (valor: T) => void;
+      const promesa = new Promise<T>((r) => (resolver = r));
+      return { promesa, resolver };
+    };
+
+    it('se queda la lista de la última recarga, aunque la anterior llegue después', async () => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
+      const primera = diferida<(typeof tim)[]>();
+      vi.spyOn(service, 'obtenerContactos')
+        .mockReturnValueOnce(primera.promesa)
+        .mockResolvedValueOnce([tim]);
+
+      // Dos avisos seguidos (volver a la pestaña, Realtime): la segunda contesta antes.
+      document.dispatchEvent(new Event('visibilitychange'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      expect(nombres('compartidos')).toEqual([]);
+
+      primera.resolver([tim, bill, elon]);
+      await reposar();
+
+      expect(nombres('propios')).toEqual(['Tim Cook']);
+      expect(nombres('compartidos')).toEqual([]);
+    });
+
+    it('lo mismo con las invitaciones', async () => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'obtenerContactos').mockResolvedValue([tim]);
+      const primera = diferida<InvitacionPendiente[]>();
+      vi.spyOn(service, 'invitaciones')
+        .mockReturnValueOnce(primera.promesa)
+        .mockResolvedValueOnce([]);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      primera.resolver([
+        {
+          contacto_id: 'c9',
+          nombre: 'Ada',
+          rol: 'lector',
+          propietario_nombre: 'Invitado',
+          propietario_email: 'invitado@test.es',
+        },
+      ]);
+      await reposar();
+
+      expect(elemento.textContent).not.toContain('Invitaciones');
+    });
+
+    it('una recarga que salió antes de eliminar no devuelve el contacto a la lista', async () => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
+      const enCurso = diferida<(typeof tim)[]>();
+      vi.spyOn(service, 'obtenerContactos').mockReturnValueOnce(enCurso.promesa);
+      vi.spyOn(service, 'eliminarContacto').mockResolvedValue();
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      fixture.componentRef.setInput('contacto', 'c1');
+      await fixture.whenStable();
+      await clic(accion('Eliminar contacto'));
+      expect(nombres('propios')).toEqual([]);
+
+      // La respuesta de antes del borrado todavía trae a Tim.
+      enCurso.resolver([tim, bill, elon]);
+      await reposar();
+
+      expect(nombres('propios')).toEqual([]);
+    });
+  });
+
   describe('invitaciones', () => {
     const invitacion: InvitacionPendiente = {
       contacto_id: 'c9',
@@ -593,6 +670,28 @@ describe('MisContactosComponent', () => {
       expect(service.dejarDeCompartir).toHaveBeenCalledExactlyOnceWith('c9', 'u1');
       expect(elemento.textContent).not.toContain('Ada');
       expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Invitación rechazada' });
+    });
+
+    it('una carga de invitaciones que salió antes de rechazar no la devuelve', async () => {
+      const service = await montar();
+      vi.spyOn(service, 'obtenerContactos').mockResolvedValue([tim]);
+      let resolverInvitaciones!: (valor: InvitacionPendiente[]) => void;
+      vi.mocked(service.invitaciones).mockReturnValueOnce(
+        new Promise((resolver) => (resolverInvitaciones = resolver)),
+      );
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.spyOn(service, 'dejarDeCompartir').mockResolvedValue();
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      await clic(botonDe('Rechazar'));
+      expect(elemento.textContent).not.toContain('Ada');
+
+      // La respuesta de antes del rechazo todavía trae la invitación.
+      resolverInvitaciones([invitacion]);
+      await reposar();
+
+      expect(elemento.textContent).not.toContain('Ada');
     });
 
     it('si no se confirma el rechazo, la invitación sigue', async () => {
