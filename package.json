@@ -43,10 +43,5 @@
   },
   "keywords": [],
   "author": "Jairo ST",
-  "license": "MIT",
-  "overrides": {
-    "@angular/build": {
-      "vite": "8.3.5"
-    }
-  }
+  "license": "MIT"
 }
