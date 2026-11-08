@@ -9,6 +9,7 @@ import { MensajesService } from '../mensajes.service';
 import { SUPABASE } from '../supabase/supabase.client';
 import { contactoVisibleDePrueba } from '../testing/contactos-de-prueba';
 import { SupabaseFalso, crearSupabaseFalso } from '../testing/supabase-falso';
+import { TiempoRealService } from '../tiempo-real.service';
 import { CompartirContactoComponent } from './compartir-contacto.component';
 
 // Lo que entrega el resolver: el contacto entero (Tim Cook, de u1) y el rol de quien lo abre.
@@ -569,6 +570,87 @@ describe('CompartirContactoComponent', () => {
 
         expect(mensajes.mensaje()).toBeNull();
       });
+    });
+  });
+
+  describe('cargas que contestan en otro orden', () => {
+    const b: Comparticion = {
+      usuario_id: 'u2',
+      rol: 'lector',
+      estado: 'pendiente',
+      email: 'b@x.es',
+    };
+    const c: Comparticion = {
+      usuario_id: 'u3',
+      rol: 'editor',
+      estado: 'aceptada',
+      email: 'c@x.es',
+    };
+    // Una respuesta que se entrega a mano, para contestar en el orden que convenga.
+    const diferida = () => {
+      let resolver!: (valor: Comparticion[]) => void;
+      const promesa = new Promise<Comparticion[]>((r) => (resolver = r));
+      return { promesa, resolver };
+    };
+    // Un aviso de Realtime: vuelve a pedir las dos listas.
+    const avisoDeRealtime = async () => {
+      TestBed.inject(TiempoRealService).revision.update((valor) => valor + 1);
+      await reposar();
+    };
+
+    it('se queda la lista de la última carga, aunque la anterior llegue después', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      const primera = diferida();
+      vi.spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(primera.promesa)
+        .mockResolvedValueOnce([c]);
+
+      await avisoDeRealtime();
+      await avisoDeRealtime();
+      expect(emails()).toEqual(['c@x.es']);
+
+      primera.resolver([b, c]);
+      await reposar();
+
+      expect(emails()).toEqual(['c@x.es']);
+    });
+
+    it('una carga que salió antes de revocar no devuelve a la persona a la lista', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      const enCurso = diferida();
+      vi.spyOn(service, 'listarComparticiones').mockReturnValueOnce(enCurso.promesa);
+
+      await avisoDeRealtime();
+      revocar(0).click();
+      await reposar();
+      expect(emails()).toEqual(['c@x.es']);
+
+      // La respuesta de antes de revocar todavía trae a b@x.es.
+      enCurso.resolver([b, c]);
+      await reposar();
+
+      expect(emails()).toEqual(['c@x.es']);
+    });
+
+    it('una carga que salió antes de cambiar un rol no lo deshace', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      const enCurso = diferida();
+      vi.spyOn(service, 'listarComparticiones').mockReturnValueOnce(enCurso.promesa);
+
+      await avisoDeRealtime();
+      await cambiarRol(0, 'editor');
+      expect(roles()).toEqual(['editor', 'editor']);
+
+      enCurso.resolver([b, c]);
+      await reposar();
+
+      expect(roles()).toEqual(['editor', 'editor']);
     });
   });
 
