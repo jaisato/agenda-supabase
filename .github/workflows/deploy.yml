@@ -89,7 +89,6 @@ jobs:
       - name: Subir los source maps a Sentry
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_URL: https://de.sentry.io
           SENTRY_ORG: alten-xy
           SENTRY_PROJECT: agenda-supabase
           SENTRY_RELEASE: agenda-supabase@${{ github.sha }}
