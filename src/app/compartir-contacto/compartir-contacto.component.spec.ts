@@ -3,7 +3,13 @@ import { Router, provideRouter } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 import { MockInstance } from 'vitest';
 
-import { Comparticion, ContactoVisible, ResultadoCompartir, Rol } from '../contacto';
+import {
+  Comparticion,
+  ContactoVisible,
+  InvitacionPorEmail,
+  ResultadoCompartir,
+  Rol,
+} from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { MensajesService } from '../mensajes.service';
 import { SUPABASE } from '../supabase/supabase.client';
@@ -651,6 +657,46 @@ describe('CompartirContactoComponent', () => {
       await reposar();
 
       expect(roles()).toEqual(['editor', 'editor']);
+    });
+
+    it('una carga que salió antes de revocar una invitación por email no la devuelve', async () => {
+      const porEmail: InvitacionPorEmail = { email: 'nadie@test.local', rol: 'lector' };
+      falso.respuestaDe('invitaciones_contacto', { data: [porEmail], error: null });
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      let resolver!: (valor: InvitacionPorEmail[]) => void;
+      vi.spyOn(service, 'listarInvitacionesEmail').mockReturnValueOnce(
+        new Promise((r) => (resolver = r)),
+      );
+
+      await avisoDeRealtime();
+      elemento.querySelector<HTMLButtonElement>('#invitaciones button')!.click();
+      await reposar();
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+
+      // La respuesta de antes de revocar todavía trae la invitación.
+      resolver([porEmail]);
+      await reposar();
+
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+    });
+
+    it('el error de una carga que ya no es la última no se avisa', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      let rechazar!: (motivo: PostgrestError) => void;
+      vi.spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(new Promise((_, r) => (rechazar = r)))
+        .mockResolvedValueOnce([c]);
+
+      await avisoDeRealtime();
+      await avisoDeRealtime();
+      rechazar(sinPermiso);
+      await reposar();
+
+      expect(mensajes.mensaje()).toBeNull();
+      expect(emails()).toEqual(['c@x.es']);
     });
   });
 

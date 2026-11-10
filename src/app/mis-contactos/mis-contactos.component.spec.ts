@@ -594,6 +594,42 @@ describe('MisContactosComponent', () => {
 
       expect(nombres('propios')).toEqual([]);
     });
+
+    it('el error de una recarga que ya no es la última no se avisa', async () => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
+      let rechazar!: (motivo: PostgrestError) => void;
+      vi.spyOn(service, 'obtenerContactos')
+        .mockReturnValueOnce(new Promise((_, r) => (rechazar = r)))
+        .mockResolvedValueOnce([tim]);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      rechazar(sinPermiso);
+      await reposar();
+
+      expect(mensajes.mensaje()).toBeNull();
+      expect(nombres('propios')).toEqual(['Tim Cook']);
+    });
+
+    it('ni el de una carga de invitaciones que ya no es la última', async () => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'obtenerContactos').mockResolvedValue([tim]);
+      let rechazar!: (motivo: PostgrestError) => void;
+      vi.spyOn(service, 'invitaciones')
+        .mockReturnValueOnce(new Promise((_, r) => (rechazar = r)))
+        .mockResolvedValueOnce([]);
+
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+      rechazar(sinPermiso);
+      await reposar();
+
+      expect(mensajes.mensaje()).toBeNull();
+    });
   });
 
   describe('invitaciones', () => {
