@@ -574,11 +574,17 @@ describe('MisContactosComponent', () => {
       expect(elemento.textContent).not.toContain('Invitaciones');
     });
 
-    it('una recarga que salió antes de eliminar no devuelve el contacto a la lista', async () => {
+    it('eliminar con una recarga pendiente vuelve a pedir la lista: ni vuelve el contacto ni se pierde lo ajeno', async () => {
       const service = TestBed.inject(ContactosService);
       vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
-      const enCurso = diferida<(typeof tim)[]>();
-      vi.spyOn(service, 'obtenerContactos').mockReturnValueOnce(enCurso.promesa);
+      // Quien compartía a Elon acaba de revocarlo: la lista se vuelve a pedir y la respuesta tarda.
+      // La recarga pendiente salió antes del borrado y devolvería a Tim; la que se pide después
+      // ya viene sin él, y sin Elon.
+      const pendiente = diferida<(typeof tim)[]>();
+      const obtener = vi
+        .spyOn(service, 'obtenerContactos')
+        .mockReturnValueOnce(pendiente.promesa)
+        .mockResolvedValueOnce([bill]);
       vi.spyOn(service, 'eliminarContacto').mockResolvedValue();
       vi.spyOn(window, 'confirm').mockReturnValue(true);
 
@@ -586,12 +592,34 @@ describe('MisContactosComponent', () => {
       fixture.componentRef.setInput('contacto', 'c1');
       await fixture.whenStable();
       await clic(accion('Eliminar contacto'));
-      expect(nombres('propios')).toEqual([]);
 
-      // La respuesta de antes del borrado todavía trae a Tim.
-      enCurso.resolver([tim, bill, elon]);
+      expect(obtener).toHaveBeenCalledTimes(2);
+      expect(nombres('propios')).toEqual([]);
+      expect(nombres('compartidos')).toEqual(['Bill Gates']);
+
+      // La respuesta de antes del borrado llega al final y todavía trae a Tim.
+      pendiente.resolver([tim, bill]);
       await reposar();
 
+      expect(nombres('propios')).toEqual([]);
+      expect(nombres('compartidos')).toEqual(['Bill Gates']);
+    });
+
+    it('sin ninguna recarga pendiente, eliminar no pide la lista', async () => {
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'invitaciones').mockResolvedValue([]);
+      const obtener = vi.spyOn(service, 'obtenerContactos').mockResolvedValue([tim, bill, elon]);
+      vi.spyOn(service, 'eliminarContacto').mockResolvedValue();
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      // Una recarga que ya ha contestado no está pendiente.
+      document.dispatchEvent(new Event('visibilitychange'));
+      await reposar();
+
+      fixture.componentRef.setInput('contacto', 'c1');
+      await fixture.whenStable();
+      await clic(accion('Eliminar contacto'));
+
+      expect(obtener).toHaveBeenCalledTimes(1);
       expect(nombres('propios')).toEqual([]);
     });
 
@@ -708,25 +736,47 @@ describe('MisContactosComponent', () => {
       expect(mensajes.mensaje()).toEqual({ tipo: 'exito', texto: 'Invitación rechazada' });
     });
 
-    it('una carga de invitaciones que salió antes de rechazar no la devuelve', async () => {
+    it('rechazar con una carga de invitaciones pendiente las vuelve a pedir: ni vuelve la rechazada ni se pierde la que acaba de llegar', async () => {
       const service = await montar();
       vi.spyOn(service, 'obtenerContactos').mockResolvedValue([tim]);
-      let resolverInvitaciones!: (valor: InvitacionPendiente[]) => void;
-      vi.mocked(service.invitaciones).mockReturnValueOnce(
-        new Promise((resolver) => (resolverInvitaciones = resolver)),
-      );
+      // Acaba de llegar otra invitación: se vuelven a pedir y la respuesta tarda. La carga
+      // pendiente salió antes del rechazo y devolvería la de Ada; la que se pide después ya viene
+      // sin ella, y con la nueva.
+      const otra: InvitacionPendiente = { ...invitacion, contacto_id: 'c10', nombre: 'Grace' };
+      let resolverPendiente!: (valor: InvitacionPendiente[]) => void;
+      const pedir = vi
+        .mocked(service.invitaciones)
+        .mockReturnValueOnce(new Promise((resolver) => (resolverPendiente = resolver)))
+        .mockResolvedValueOnce([otra]);
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       vi.spyOn(service, 'dejarDeCompartir').mockResolvedValue();
 
       document.dispatchEvent(new Event('visibilitychange'));
       await reposar();
+      const pedidas = pedir.mock.calls.length;
       await clic(botonDe('Rechazar'));
-      expect(elemento.textContent).not.toContain('Ada');
 
-      // La respuesta de antes del rechazo todavía trae la invitación.
-      resolverInvitaciones([invitacion]);
+      expect(pedir).toHaveBeenCalledTimes(pedidas + 1);
+      expect(elemento.textContent).not.toContain('Ada');
+      expect(elemento.textContent).toContain('Grace');
+
+      // La respuesta de antes del rechazo llega al final y todavía trae la invitación de Ada.
+      resolverPendiente([invitacion, otra]);
       await reposar();
 
+      expect(elemento.textContent).not.toContain('Ada');
+      expect(elemento.textContent).toContain('Grace');
+    });
+
+    it('sin ninguna carga pendiente, rechazar no vuelve a pedir las invitaciones', async () => {
+      const service = await montar();
+      const pedidas = vi.mocked(service.invitaciones).mock.calls.length;
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.spyOn(service, 'dejarDeCompartir').mockResolvedValue();
+
+      await clic(botonDe('Rechazar'));
+
+      expect(service.invitaciones).toHaveBeenCalledTimes(pedidas);
       expect(elemento.textContent).not.toContain('Ada');
     });
 

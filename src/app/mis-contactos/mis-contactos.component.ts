@@ -72,6 +72,12 @@ export class MisContactosComponent {
   // pasa turno, para que una carga que salió antes no la devuelva a la lista.
   private turnoLista = 0;
   private turnoInvitaciones = 0;
+  // Las cargas pedidas que aún no han contestado. La que estuviera en vuelo al pasar turno a mano
+  // queda invalidada entera, también lo ajeno que trajera (un contacto que alguien acaba de
+  // compartir, otra invitación), así que se pide otra: sale después del cambio y ya lo refleja.
+  // Sin ella la pantalla se quedaba con lo de antes hasta el siguiente aviso.
+  private listasEnVuelo = 0;
+  private invitacionesEnVuelo = 0;
 
   constructor() {
     const documento = inject(DOCUMENT);
@@ -176,6 +182,9 @@ export class MisContactosComponent {
       lista.filter((i) => i.contacto_id !== invitacion.contacto_id),
     );
     this._mensajes.exito('Invitación rechazada');
+    if (this.invitacionesEnVuelo > 0) {
+      void this.cargarInvitaciones();
+    }
   }
 
   // Solo navega: el detalle cambia cuando el router entrega ?contacto= (ver seleccionado).
@@ -199,10 +208,14 @@ export class MisContactosComponent {
     if (this.contacto() === contacto.id) {
       void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
     }
+    if (this.listasEnVuelo > 0) {
+      void this.recargar();
+    }
   }
 
   private async cargarInvitaciones(): Promise<void> {
     const turno = ++this.turnoInvitaciones;
+    this.invitacionesEnVuelo++;
     try {
       const invitaciones = await this._contactosService.invitaciones();
       if (turno === this.turnoInvitaciones) {
@@ -212,12 +225,15 @@ export class MisContactosComponent {
       if (turno === this.turnoInvitaciones) {
         this._mensajes.error(this._mensajes.deError(error as PostgrestError));
       }
+    } finally {
+      this.invitacionesEnVuelo--;
     }
   }
 
   private async recargar(): Promise<void> {
     const turno = ++this.turnoLista;
     let contactos: ContactoVisible[];
+    this.listasEnVuelo++;
     try {
       contactos = await this._contactosService.obtenerContactos();
     } catch (error) {
@@ -225,6 +241,8 @@ export class MisContactosComponent {
         this._mensajes.error(this._mensajes.deError(error as PostgrestError));
       }
       return;
+    } finally {
+      this.listasEnVuelo--;
     }
     // Hay una carga posterior en marcha: la lista y las invitaciones las pone ella.
     if (turno !== this.turnoLista) {

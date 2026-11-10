@@ -623,61 +623,111 @@ describe('CompartirContactoComponent', () => {
       expect(emails()).toEqual(['c@x.es']);
     });
 
-    it('una carga que salió antes de revocar no devuelve a la persona a la lista', async () => {
+    // Los tres cambios a mano, con una carga pendiente que además trae un cambio ajeno. La carga
+    // pendiente salió antes del cambio y lo desharía; la que se pide después ya lo trae, con lo
+    // ajeno.
+    const d: Comparticion = {
+      usuario_id: 'u4',
+      rol: 'lector',
+      estado: 'aceptada',
+      email: 'd@x.es',
+    };
+
+    it('revocar con una carga pendiente vuelve a pedir las listas: ni vuelve la persona ni se pierde lo ajeno', async () => {
       await abrir(propio);
       const service = TestBed.inject(ContactosService);
       vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
-      const enCurso = diferida();
-      vi.spyOn(service, 'listarComparticiones').mockReturnValueOnce(enCurso.promesa);
+      // d@x.es acaba de canjear su invitación: el aviso vuelve a pedir las listas y la respuesta
+      // tarda.
+      const pendiente = diferida();
+      const listar = vi
+        .spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(pendiente.promesa)
+        // La que sale después de revocar: ya sin b@x.es.
+        .mockResolvedValueOnce([c, d]);
 
       await avisoDeRealtime();
       revocar(0).click();
       await reposar();
-      expect(emails()).toEqual(['c@x.es']);
 
-      // La respuesta de antes de revocar todavía trae a b@x.es.
-      enCurso.resolver([b, c]);
+      expect(listar).toHaveBeenCalledTimes(2);
+      expect(emails()).toEqual(['c@x.es', 'd@x.es']);
+
+      // La respuesta de antes de revocar llega al final y todavía trae a b@x.es.
+      pendiente.resolver([b, c, d]);
       await reposar();
 
-      expect(emails()).toEqual(['c@x.es']);
+      expect(emails()).toEqual(['c@x.es', 'd@x.es']);
     });
 
-    it('una carga que salió antes de cambiar un rol no lo deshace', async () => {
+    it('cambiar un rol con una carga pendiente vuelve a pedir las listas: ni se deshace el rol ni se pierde lo ajeno', async () => {
       await abrir(propio);
       const service = TestBed.inject(ContactosService);
       vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
-      const enCurso = diferida();
-      vi.spyOn(service, 'listarComparticiones').mockReturnValueOnce(enCurso.promesa);
+      const pendiente = diferida();
+      const listar = vi
+        .spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(pendiente.promesa)
+        // La que sale después del cambio: b@x.es ya es editor.
+        .mockResolvedValueOnce([{ ...b, rol: 'editor' }, c, d]);
 
       await avisoDeRealtime();
       await cambiarRol(0, 'editor');
-      expect(roles()).toEqual(['editor', 'editor']);
 
-      enCurso.resolver([b, c]);
+      expect(listar).toHaveBeenCalledTimes(2);
+      expect(emails()).toEqual(['b@x.es', 'c@x.es', 'd@x.es']);
+      expect(roles()).toEqual(['editor', 'editor', 'lector']);
+
+      // La respuesta de antes del cambio llega al final, con b@x.es todavía como lector.
+      pendiente.resolver([b, c, d]);
       await reposar();
 
-      expect(roles()).toEqual(['editor', 'editor']);
+      expect(roles()).toEqual(['editor', 'editor', 'lector']);
     });
 
-    it('una carga que salió antes de revocar una invitación por email no la devuelve', async () => {
+    it('revocar una invitación por email con una carga pendiente vuelve a pedir las listas: ni vuelve la invitación ni sigue como pendiente quien acaba de aceptar', async () => {
       const porEmail: InvitacionPorEmail = { email: 'nadie@test.local', rol: 'lector' };
       falso.respuestaDe('invitaciones_contacto', { data: [porEmail], error: null });
       await abrir(propio);
       const service = TestBed.inject(ContactosService);
+      // b@x.es acaba de aceptar: el aviso de Realtime vuelve a pedir las listas y la respuesta
+      // tarda. Revocar la invitación por email no produce otro aviso.
+      const listar = vi
+        .spyOn(service, 'listarComparticiones')
+        .mockResolvedValue([{ ...b, estado: 'aceptada' }, c]);
       let resolver!: (valor: InvitacionPorEmail[]) => void;
-      vi.spyOn(service, 'listarInvitacionesEmail').mockReturnValueOnce(
-        new Promise((r) => (resolver = r)),
-      );
+      vi.spyOn(service, 'listarInvitacionesEmail')
+        .mockReturnValueOnce(new Promise((r) => (resolver = r)))
+        // La que sale después de revocar: ya sin la invitación.
+        .mockResolvedValueOnce([]);
 
       await avisoDeRealtime();
       elemento.querySelector<HTMLButtonElement>('#invitaciones button')!.click();
       await reposar();
-      expect(elemento.querySelector('#invitaciones')).toBeNull();
 
-      // La respuesta de antes de revocar todavía trae la invitación.
+      expect(listar).toHaveBeenCalledTimes(2);
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+      expect(estados()).toEqual(['aceptada', 'aceptada']);
+
+      // La respuesta de antes de revocar llega al final y todavía trae la invitación.
       resolver([porEmail]);
       await reposar();
 
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+      expect(estados()).toEqual(['aceptada', 'aceptada']);
+    });
+
+    it('sin ninguna carga pendiente, un cambio a mano no pide nada', async () => {
+      const porEmail: InvitacionPorEmail = { email: 'nadie@test.local', rol: 'lector' };
+      falso.respuestaDe('invitaciones_contacto', { data: [porEmail], error: null });
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      const listar = vi.spyOn(service, 'listarComparticiones');
+
+      elemento.querySelector<HTMLButtonElement>('#invitaciones button')!.click();
+      await reposar();
+
+      expect(listar).not.toHaveBeenCalled();
       expect(elemento.querySelector('#invitaciones')).toBeNull();
     });
 

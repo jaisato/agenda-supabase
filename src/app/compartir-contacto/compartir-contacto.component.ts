@@ -43,6 +43,8 @@ export class CompartirContactoComponent implements OnInit {
   // Realtime llegan en ráfaga y pueden contestar en otro orden), y cambiar un rol o revocar a mano
   // pasa turno, para que una carga que salió antes no deshaga en pantalla lo que se acaba de hacer.
   private turno = 0;
+  // Las cargas pedidas que aún no han contestado: ver pasarTurno().
+  private enVuelo = 0;
 
   constructor() {
     // revision 0 es el arranque: la carga la hace ngOnInit. Un aviso posterior vuelve a pedirlas.
@@ -106,7 +108,7 @@ export class CompartirContactoComponent implements OnInit {
       this.avisarDe(error);
       return;
     }
-    this.turno++;
+    this.pasarTurno();
     this.comparticiones.update((lista) =>
       lista.map((c) => (c.usuario_id === comparticion.usuario_id ? { ...c, rol } : c)),
     );
@@ -121,7 +123,7 @@ export class CompartirContactoComponent implements OnInit {
       this.avisarDe(error);
       return;
     }
-    this.turno++;
+    this.pasarTurno();
     this.comparticiones.update((lista) =>
       lista.filter((c) => c.usuario_id !== comparticion.usuario_id),
     );
@@ -135,8 +137,20 @@ export class CompartirContactoComponent implements OnInit {
       this.avisarDe(error);
       return;
     }
-    this.turno++;
+    this.pasarTurno();
     this.invitaciones.update((lista) => lista.filter((i) => i.email !== invitacion.email));
+  }
+
+  // Tras un cambio hecho a mano. La carga que estuviera en vuelo queda invalidada entera, también
+  // lo ajeno que trajera (otro invitado que acaba de aceptar), así que se pide otra: sale después
+  // del cambio y ya lo refleja. Sin ella la pantalla se quedaba con el estado viejo hasta el
+  // siguiente aviso, y revocar una invitación por email no produce ninguno (TiempoRealService no
+  // escucha invitaciones_contacto).
+  private pasarTurno(): void {
+    this.turno++;
+    if (this.enVuelo > 0) {
+      void this.cargar();
+    }
   }
 
   // Pide las dos listas. Si falla, avisa y deja las que hubiera.
@@ -146,6 +160,7 @@ export class CompartirContactoComponent implements OnInit {
       return;
     }
     const turno = ++this.turno;
+    this.enVuelo++;
     try {
       const lista = await this._contactosService.listarComparticiones(contacto.id);
       const porEmail = await this._contactosService.listarInvitacionesEmail(contacto.id);
@@ -162,6 +177,8 @@ export class CompartirContactoComponent implements OnInit {
         this.avisarDe(error);
       }
       return;
+    } finally {
+      this.enVuelo--;
     }
     this.cargada.set(true);
   }
