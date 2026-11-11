@@ -65,6 +65,20 @@ export class MisContactosComponent {
   });
   protected readonly invitaciones = signal<InvitacionPendiente[]>([]);
 
+  // Cada carga se numera y solo aplica su respuesta la última pedida. Los avisos de Realtime llegan
+  // en ráfaga, se suman al de volver a la pestaña, y las peticiones pueden contestar en otro orden:
+  // sin esto, una respuesta anterior que llegaba tarde dejaba la lista, o las invitaciones, como
+  // estaban antes del cambio. Quitar una fila a mano (eliminar, dejar de ver, rechazar) también
+  // pasa turno, para que una carga que salió antes no la devuelva a la lista.
+  private turnoLista = 0;
+  private turnoInvitaciones = 0;
+  // Las cargas pedidas que aún no han contestado. La que estuviera en vuelo al pasar turno a mano
+  // queda invalidada entera, también lo ajeno que trajera (un contacto que alguien acaba de
+  // compartir, otra invitación), así que se pide otra: sale después del cambio y ya lo refleja.
+  // Sin ella la pantalla se quedaba con lo de antes hasta el siguiente aviso.
+  private listasEnVuelo = 0;
+  private invitacionesEnVuelo = 0;
+
   constructor() {
     const documento = inject(DOCUMENT);
     const destroyRef = inject(DestroyRef);
@@ -163,10 +177,14 @@ export class MisContactosComponent {
       this._mensajes.error(this._mensajes.deError(error as PostgrestError));
       return;
     }
+    this.turnoInvitaciones++;
     this.invitaciones.update((lista) =>
       lista.filter((i) => i.contacto_id !== invitacion.contacto_id),
     );
     this._mensajes.exito('Invitación rechazada');
+    if (this.invitacionesEnVuelo > 0) {
+      void this.cargarInvitaciones();
+    }
   }
 
   // Solo navega: el detalle cambia cuando el router entrega ?contacto= (ver seleccionado).
@@ -185,27 +203,52 @@ export class MisContactosComponent {
   // seleccionado, y fuera de la URL si seguía abierto. Si mientras esperaba la respuesta se ha
   // elegido otro, la URL ya apunta a ese y no se toca.
   private quitarDeLasListas(contacto: ContactoVisible): void {
+    this.turnoLista++;
     this.lista.update((contactos) => contactos.filter((c) => c.id !== contacto.id));
     if (this.contacto() === contacto.id) {
       void this._router.navigate(['/mis-contactos'], { queryParams: { contacto: null } });
     }
+    if (this.listasEnVuelo > 0) {
+      void this.recargar();
+    }
   }
 
   private async cargarInvitaciones(): Promise<void> {
+    const turno = ++this.turnoInvitaciones;
+    this.invitacionesEnVuelo++;
     try {
-      this.invitaciones.set(await this._contactosService.invitaciones());
+      const invitaciones = await this._contactosService.invitaciones();
+      if (turno === this.turnoInvitaciones) {
+        this.invitaciones.set(invitaciones);
+      }
     } catch (error) {
-      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      if (turno === this.turnoInvitaciones) {
+        this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      }
+    } finally {
+      this.invitacionesEnVuelo--;
     }
   }
 
   private async recargar(): Promise<void> {
+    const turno = ++this.turnoLista;
+    let contactos: ContactoVisible[];
+    this.listasEnVuelo++;
     try {
-      this.aplicarLista(await this._contactosService.obtenerContactos());
+      contactos = await this._contactosService.obtenerContactos();
     } catch (error) {
-      this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      if (turno === this.turnoLista) {
+        this._mensajes.error(this._mensajes.deError(error as PostgrestError));
+      }
+      return;
+    } finally {
+      this.listasEnVuelo--;
+    }
+    // Hay una carga posterior en marcha: la lista y las invitaciones las pone ella.
+    if (turno !== this.turnoLista) {
       return;
     }
+    this.aplicarLista(contactos);
     await this.cargarInvitaciones();
   }
 

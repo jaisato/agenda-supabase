@@ -39,6 +39,12 @@ export class CompartirContactoComponent implements OnInit {
   protected readonly cargada = signal(false);
   // Mientras espera la respuesta no se puede volver a enviar el formulario.
   protected readonly enviando = signal(false);
+  // Como en MisContactosComponent: solo aplica su respuesta la última carga pedida (los avisos de
+  // Realtime llegan en ráfaga y pueden contestar en otro orden), y cambiar un rol o revocar a mano
+  // pasa turno, para que una carga que salió antes no deshaga en pantalla lo que se acaba de hacer.
+  private turno = 0;
+  // Las cargas pedidas que aún no han contestado: ver pasarTurno().
+  private enVuelo = 0;
 
   constructor() {
     // revision 0 es el arranque: la carga la hace ngOnInit. Un aviso posterior vuelve a pedirlas.
@@ -102,6 +108,7 @@ export class CompartirContactoComponent implements OnInit {
       this.avisarDe(error);
       return;
     }
+    this.pasarTurno();
     this.comparticiones.update((lista) =>
       lista.map((c) => (c.usuario_id === comparticion.usuario_id ? { ...c, rol } : c)),
     );
@@ -116,6 +123,7 @@ export class CompartirContactoComponent implements OnInit {
       this.avisarDe(error);
       return;
     }
+    this.pasarTurno();
     this.comparticiones.update((lista) =>
       lista.filter((c) => c.usuario_id !== comparticion.usuario_id),
     );
@@ -129,7 +137,19 @@ export class CompartirContactoComponent implements OnInit {
       this.avisarDe(error);
       return;
     }
+    this.pasarTurno();
     this.invitaciones.update((lista) => lista.filter((i) => i.email !== invitacion.email));
+  }
+
+  // Tras un cambio hecho a mano. La carga que estuviera en vuelo queda invalidada entera, también
+  // lo ajeno que trajera (otro invitado que acaba de aceptar), así que se pide otra: sale después
+  // del cambio y ya lo refleja. Sin ella la pantalla se quedaba con el estado viejo hasta el aviso
+  // del propio cambio, que solo llega si Realtime está en marcha.
+  private pasarTurno(): void {
+    this.turno++;
+    if (this.enVuelo > 0) {
+      void this.cargar();
+    }
   }
 
   // Pide las dos listas. Si falla, avisa y deja las que hubiera.
@@ -138,16 +158,26 @@ export class CompartirContactoComponent implements OnInit {
     if (!contacto) {
       return;
     }
+    const turno = ++this.turno;
+    this.enVuelo++;
     try {
       const lista = await this._contactosService.listarComparticiones(contacto.id);
       const porEmail = await this._contactosService.listarInvitacionesEmail(contacto.id);
+      // Hay una carga posterior en marcha, o un cambio hecho a mano: manda lo de después.
+      if (turno !== this.turno) {
+        return;
+      }
       // PostgREST no garantiza el orden: por email, para que la lista no se reordene al volver a
       // compartir con alguien (que actualiza su fila).
       this.comparticiones.set([...lista].sort((a, b) => a.email.localeCompare(b.email, 'es')));
       this.invitaciones.set([...porEmail].sort((a, b) => a.email.localeCompare(b.email, 'es')));
     } catch (error) {
-      this.avisarDe(error);
+      if (turno === this.turno) {
+        this.avisarDe(error);
+      }
       return;
+    } finally {
+      this.enVuelo--;
     }
     this.cargada.set(true);
   }

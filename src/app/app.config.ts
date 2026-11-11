@@ -1,4 +1,10 @@
-import { ApplicationConfig, inject, provideBrowserGlobalErrorListeners } from '@angular/core';
+import {
+  ApplicationConfig,
+  ErrorHandler,
+  inject,
+  provideAppInitializer,
+  provideBrowserGlobalErrorListeners,
+} from '@angular/core';
 import {
   NavigationError,
   RedirectCommand,
@@ -7,6 +13,7 @@ import {
   withComponentInputBinding,
   withNavigationErrorHandler,
 } from '@angular/router';
+import * as Sentry from '@sentry/angular';
 import { PostgrestError } from '@supabase/supabase-js';
 
 import { routes } from './app.routes';
@@ -39,6 +46,14 @@ function avisarDelErrorDeNavegacion(navegacion: NavigationError): RedirectComman
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
+    // Sentry (Sentry.init va en main.ts): los errores que llegan al ErrorHandler de Angular se
+    // envían además de escribirse en la consola, y TraceService convierte cada navegación del
+    // router en una traza. Funciona sin zone.js: se engancha a los eventos del Router.
+    { provide: ErrorHandler, useValue: Sentry.createErrorHandler() },
+    { provide: Sentry.TraceService, deps: [Router] },
+    provideAppInitializer(() => {
+      inject(Sentry.TraceService);
+    }),
     // withComponentInputBinding() entrega los datos de los resolvers como inputs
     // del componente de la ruta.
     provideRouter(
