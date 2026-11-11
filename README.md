@@ -243,7 +243,7 @@ Necesitas:
   `^22.22.3 || ^24.15.0 || >=26.0.0`, el rango que declara `engines` en `package.json`.
 - npm (el que trae Node 24).
 - Docker en marcha: el backend local son los contenedores de la CLI de Supabase. La CLI no hace
-  falta instalarla: es una `devDependency` con la versión fijada (2.120.0) y se usa como
+  falta instalarla: es una `devDependency` con la versión fijada (3.0.0) y se usa como
   `npx supabase`.
 
 ```sh
@@ -710,7 +710,7 @@ español y sin tildes.
 ### Versiones y dependencias
 
 - Angular 22 (CLI con el builder `@angular/build`), TypeScript 6.0 y Vitest 5 con jsdom.
-- `@supabase/supabase-js` 2.118.0 y la CLI `supabase` 2.122.0, con versiones exactas.
+- `@supabase/supabase-js` 2.118.0 y la CLI `supabase` 3.0.0, con versiones exactas.
 - Dependabot propone cada semana las actualizaciones de npm (todo `@angular/*` en una sola PR, y
   `@supabase/*` con la CLI `supabase` en otra) y cada mes las de las acciones de GitHub. Las
   versiones mayores de Angular se hacen con `ng update`, que también aplica las migraciones de

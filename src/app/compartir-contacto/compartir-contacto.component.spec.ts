@@ -3,12 +3,19 @@ import { Router, provideRouter } from '@angular/router';
 import { PostgrestError } from '@supabase/supabase-js';
 import { MockInstance } from 'vitest';
 
-import { Comparticion, ContactoVisible, ResultadoCompartir, Rol } from '../contacto';
+import {
+  Comparticion,
+  ContactoVisible,
+  InvitacionPorEmail,
+  ResultadoCompartir,
+  Rol,
+} from '../contacto';
 import { ContactosService } from '../contactos.service';
 import { MensajesService } from '../mensajes.service';
 import { SUPABASE } from '../supabase/supabase.client';
 import { contactoVisibleDePrueba } from '../testing/contactos-de-prueba';
 import { SupabaseFalso, crearSupabaseFalso } from '../testing/supabase-falso';
+import { TiempoRealService } from '../tiempo-real.service';
 import { CompartirContactoComponent } from './compartir-contacto.component';
 
 // Lo que entrega el resolver: el contacto entero (Tim Cook, de u1) y el rol de quien lo abre.
@@ -569,6 +576,177 @@ describe('CompartirContactoComponent', () => {
 
         expect(mensajes.mensaje()).toBeNull();
       });
+    });
+  });
+
+  describe('cargas que contestan en otro orden', () => {
+    const b: Comparticion = {
+      usuario_id: 'u2',
+      rol: 'lector',
+      estado: 'pendiente',
+      email: 'b@x.es',
+    };
+    const c: Comparticion = {
+      usuario_id: 'u3',
+      rol: 'editor',
+      estado: 'aceptada',
+      email: 'c@x.es',
+    };
+    // Una respuesta que se entrega a mano, para contestar en el orden que convenga.
+    const diferida = () => {
+      let resolver!: (valor: Comparticion[]) => void;
+      const promesa = new Promise<Comparticion[]>((r) => (resolver = r));
+      return { promesa, resolver };
+    };
+    // Un aviso de Realtime: vuelve a pedir las dos listas.
+    const avisoDeRealtime = async () => {
+      TestBed.inject(TiempoRealService).revision.update((valor) => valor + 1);
+      await reposar();
+    };
+
+    it('se queda la lista de la última carga, aunque la anterior llegue después', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      const primera = diferida();
+      vi.spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(primera.promesa)
+        .mockResolvedValueOnce([c]);
+
+      await avisoDeRealtime();
+      await avisoDeRealtime();
+      expect(emails()).toEqual(['c@x.es']);
+
+      primera.resolver([b, c]);
+      await reposar();
+
+      expect(emails()).toEqual(['c@x.es']);
+    });
+
+    // Los tres cambios a mano, con una carga pendiente que además trae un cambio ajeno. La carga
+    // pendiente salió antes del cambio y lo desharía; la que se pide después ya lo trae, con lo
+    // ajeno.
+    const d: Comparticion = {
+      usuario_id: 'u4',
+      rol: 'lector',
+      estado: 'aceptada',
+      email: 'd@x.es',
+    };
+
+    it('revocar con una carga pendiente vuelve a pedir las listas: ni vuelve la persona ni se pierde lo ajeno', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      // d@x.es acaba de canjear su invitación: el aviso vuelve a pedir las listas y la respuesta
+      // tarda.
+      const pendiente = diferida();
+      const listar = vi
+        .spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(pendiente.promesa)
+        // La que sale después de revocar: ya sin b@x.es.
+        .mockResolvedValueOnce([c, d]);
+
+      await avisoDeRealtime();
+      revocar(0).click();
+      await reposar();
+
+      expect(listar).toHaveBeenCalledTimes(2);
+      expect(emails()).toEqual(['c@x.es', 'd@x.es']);
+
+      // La respuesta de antes de revocar llega al final y todavía trae a b@x.es.
+      pendiente.resolver([b, c, d]);
+      await reposar();
+
+      expect(emails()).toEqual(['c@x.es', 'd@x.es']);
+    });
+
+    it('cambiar un rol con una carga pendiente vuelve a pedir las listas: ni se deshace el rol ni se pierde lo ajeno', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      const pendiente = diferida();
+      const listar = vi
+        .spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(pendiente.promesa)
+        // La que sale después del cambio: b@x.es ya es editor.
+        .mockResolvedValueOnce([{ ...b, rol: 'editor' }, c, d]);
+
+      await avisoDeRealtime();
+      await cambiarRol(0, 'editor');
+
+      expect(listar).toHaveBeenCalledTimes(2);
+      expect(emails()).toEqual(['b@x.es', 'c@x.es', 'd@x.es']);
+      expect(roles()).toEqual(['editor', 'editor', 'lector']);
+
+      // La respuesta de antes del cambio llega al final, con b@x.es todavía como lector.
+      pendiente.resolver([b, c, d]);
+      await reposar();
+
+      expect(roles()).toEqual(['editor', 'editor', 'lector']);
+    });
+
+    it('revocar una invitación por email con una carga pendiente vuelve a pedir las listas: ni vuelve la invitación ni sigue como pendiente quien acaba de aceptar', async () => {
+      const porEmail: InvitacionPorEmail = { email: 'nadie@test.local', rol: 'lector' };
+      falso.respuestaDe('invitaciones_contacto', { data: [porEmail], error: null });
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      // b@x.es acaba de aceptar: el aviso de Realtime vuelve a pedir las listas y la respuesta
+      // tarda. Revocar la invitación por email no produce otro aviso.
+      const listar = vi
+        .spyOn(service, 'listarComparticiones')
+        .mockResolvedValue([{ ...b, estado: 'aceptada' }, c]);
+      let resolver!: (valor: InvitacionPorEmail[]) => void;
+      vi.spyOn(service, 'listarInvitacionesEmail')
+        .mockReturnValueOnce(new Promise((r) => (resolver = r)))
+        // La que sale después de revocar: ya sin la invitación.
+        .mockResolvedValueOnce([]);
+
+      await avisoDeRealtime();
+      elemento.querySelector<HTMLButtonElement>('#invitaciones button')!.click();
+      await reposar();
+
+      expect(listar).toHaveBeenCalledTimes(2);
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+      expect(estados()).toEqual(['aceptada', 'aceptada']);
+
+      // La respuesta de antes de revocar llega al final y todavía trae la invitación.
+      resolver([porEmail]);
+      await reposar();
+
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+      expect(estados()).toEqual(['aceptada', 'aceptada']);
+    });
+
+    it('sin ninguna carga pendiente, un cambio a mano no pide nada', async () => {
+      const porEmail: InvitacionPorEmail = { email: 'nadie@test.local', rol: 'lector' };
+      falso.respuestaDe('invitaciones_contacto', { data: [porEmail], error: null });
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      const listar = vi.spyOn(service, 'listarComparticiones');
+
+      elemento.querySelector<HTMLButtonElement>('#invitaciones button')!.click();
+      await reposar();
+
+      expect(listar).not.toHaveBeenCalled();
+      expect(elemento.querySelector('#invitaciones')).toBeNull();
+    });
+
+    it('el error de una carga que ya no es la última no se avisa', async () => {
+      await abrir(propio);
+      const service = TestBed.inject(ContactosService);
+      vi.spyOn(service, 'listarInvitacionesEmail').mockResolvedValue([]);
+      let rechazar!: (motivo: PostgrestError) => void;
+      vi.spyOn(service, 'listarComparticiones')
+        .mockReturnValueOnce(new Promise((_, r) => (rechazar = r)))
+        .mockResolvedValueOnce([c]);
+
+      await avisoDeRealtime();
+      await avisoDeRealtime();
+      rechazar(sinPermiso);
+      await reposar();
+
+      expect(mensajes.mensaje()).toBeNull();
+      expect(emails()).toEqual(['c@x.es']);
     });
   });
 
