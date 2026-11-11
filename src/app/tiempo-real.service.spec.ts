@@ -27,26 +27,30 @@ describe('TiempoRealService', () => {
     expect(falso.cliente.channel).not.toHaveBeenCalled();
   });
 
-  it('con sesión se suscribe a contactos y contactos_compartidos (no a invitaciones_contacto) y cada aviso sube la revisión', async () => {
+  it('con sesión abre el canal privado agenda:<id> y cada aviso sube la revisión', async () => {
     falso.auth.getSession.mockResolvedValue({ data: { session: ana }, error: null });
     const service = TestBed.inject(TiempoRealService);
     await TestBed.inject(AuthService).listo;
     await TestBed.flushEffects();
+    await vi.waitFor(() => expect(falso.cliente.channel).toHaveBeenCalled());
 
-    expect(falso.cliente.channel).toHaveBeenCalledWith('agenda-u1');
-    // Realtime no aplica RLS a los DELETE: invitaciones_contacto difundiría el email invitado.
+    expect(falso.cliente.realtime.setAuth).toHaveBeenCalledWith('token-u1');
+    expect(falso.cliente.channel).toHaveBeenCalledWith('agenda:u1', {
+      config: { private: true },
+    });
     const canal = vi.mocked(falso.cliente.channel).mock.results[0]!.value as unknown as {
       on: Mock;
     };
-    expect(canal.on.mock.calls.map((llamada) => (llamada[1] as { table: string }).table)).toEqual([
-      'contactos',
-      'contactos_compartidos',
+    expect(canal.on.mock.calls.map((llamada) => (llamada[1] as { event: string }).event)).toEqual([
+      'INSERT',
+      'UPDATE',
+      'DELETE',
     ]);
     expect(service.revision()).toBe(0);
 
     falso.emitirTiempoReal();
 
-    expect(service.revision()).toBe(2);
+    expect(service.revision()).toBe(3);
   });
 
   it('al cerrar la sesión quita el canal', async () => {
@@ -55,6 +59,7 @@ describe('TiempoRealService', () => {
     const auth = TestBed.inject(AuthService);
     await auth.listo;
     await TestBed.flushEffects();
+    await vi.waitFor(() => expect(falso.cliente.channel).toHaveBeenCalled());
 
     falso.emitirAuth('SIGNED_OUT', null);
     await TestBed.flushEffects();

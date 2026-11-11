@@ -184,14 +184,12 @@ select is_empty(
                   where a.grantee = 0 and a.privilege_type = 'EXECUTE')$$,
   'ninguna función de privado es ejecutable por public');
 
--- invitaciones_contacto no se publica: Realtime no aplica RLS a los DELETE y difundiría el email
--- invitado (está en la clave primaria) a cualquier suscriptor.
-select is(
-  (select array_agg(tablename order by tablename)
-     from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public'),
-  array['contactos', 'contactos_compartidos']::name[],
-  'Realtime publica contactos y comparticiones, no las invitaciones por email');
+-- Ninguna tabla de public va en la publicación: el aviso es un Broadcast privado (06_broadcast.sql).
+-- Postgres Changes no aplica RLS a los DELETE y difundiría la clave a cualquier suscriptor.
+select is_empty(
+  $$select tablename from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public'$$,
+  'Realtime no publica tablas de la agenda');
 
 -- crear_perfil se dispara al crear el usuario y al cambiar email, email_confirmed_at o
 -- last_sign_in_at: el canje de las invitaciones espera a la confirmación y se repite en cada inicio

@@ -143,9 +143,8 @@ export class CompartirContactoComponent implements OnInit {
 
   // Tras un cambio hecho a mano. La carga que estuviera en vuelo queda invalidada entera, también
   // lo ajeno que trajera (otro invitado que acaba de aceptar), así que se pide otra: sale después
-  // del cambio y ya lo refleja. Sin ella la pantalla se quedaba con el estado viejo hasta el
-  // siguiente aviso, y revocar una invitación por email no produce ninguno (TiempoRealService no
-  // escucha invitaciones_contacto).
+  // del cambio y ya lo refleja. Sin ella la pantalla se quedaba con el estado viejo hasta el aviso
+  // del propio cambio, que solo llega si Realtime está en marcha.
   private pasarTurno(): void {
     this.turno++;
     if (this.enVuelo > 0) {

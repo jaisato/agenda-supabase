@@ -46,3 +46,8 @@ Thumbs.db
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

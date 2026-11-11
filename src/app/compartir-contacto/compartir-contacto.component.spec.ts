@@ -691,7 +691,7 @@ describe('CompartirContactoComponent', () => {
       await abrir(propio);
       const service = TestBed.inject(ContactosService);
       // b@x.es acaba de aceptar: el aviso de Realtime vuelve a pedir las listas y la respuesta
-      // tarda. Revocar la invitación por email no produce otro aviso.
+      // tarda.
       const listar = vi
         .spyOn(service, 'listarComparticiones')
         .mockResolvedValue([{ ...b, estado: 'aceptada' }, c]);
