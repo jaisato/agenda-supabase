@@ -6,7 +6,13 @@ import { MockInstance } from 'vitest';
 import { MensajesService } from '../../mensajes.service';
 import { SUPABASE } from '../../supabase/supabase.client';
 import { SupabaseFalso, crearSupabaseFalso } from '../../testing/supabase-falso';
-import { ConfirmarComponent } from './confirmar.component';
+import {
+  AVISO_PASO_PENDIENTE,
+  ConfirmarComponent,
+  FALLO_ACCESO_DENEGADO,
+  FALLO_ENLACE_CADUCADO,
+  FALLO_GENERICO,
+} from './confirmar.component';
 
 const ana = { access_token: 'token-u1', user: { id: 'u1', email: 'ana@test.es' } } as Session;
 // Si el enlace se abre en otro navegador, GoTrue ya ha confirmado la cuenta, pero sin el
@@ -78,13 +84,14 @@ describe('ConfirmarComponent', () => {
 
     // El cambio de email con confirmación doble: el primer enlace acepta y GoTrue vuelve sin code,
     // con el aviso de que falta el del otro correo. No es un error y no hay nada que canjear.
-    it('con ?message= muestra el texto de GoTrue tal cual, sin darlo por error ni canjear nada', async () => {
+    it('con ?message= avisa de que falta el otro enlace, sin darlo por error ni canjear nada', async () => {
       const aviso =
         'Confirmation link accepted. Please proceed to confirm link sent to the other email';
 
       await abrir(undefined, { message: aviso });
 
-      expect(texto()).toContain(aviso);
+      expect(texto()).toContain(AVISO_PASO_PENDIENTE);
+      expect(texto()).not.toContain(aviso);
       expect(texto()).not.toContain(noSePudoConfirmar);
       expect(texto()).not.toContain('Confirmando…');
       expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
@@ -93,14 +100,45 @@ describe('ConfirmarComponent', () => {
     });
 
     // OAuth cancelado o denegado en el proveedor: GoTrue vuelve con ?error=&error_description=.
-    it('con ?error_description= muestra ese texto y el enlace a /entrar, sin canjear nada', async () => {
+    it('con ?error=access_denied avisa de que no hay sesión y enlaza a /entrar, sin canjear nada', async () => {
       await abrir(undefined, { error: 'access_denied', error_description: 'User denied access' });
 
-      expect(texto()).toContain('User denied access');
+      expect(texto()).toContain(FALLO_ACCESO_DENEGADO);
+      expect(texto()).not.toContain('User denied access');
       expect(texto()).not.toContain(noSePudoConfirmar);
       expect(enlaceEntrar()?.getAttribute('href')).toBe('/entrar');
       expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
       expect(navegar).not.toHaveBeenCalled();
+    });
+
+    // Un enlace del correo caducado: GoTrue añade ?error_code=otp_expired al access_denied.
+    it('con ?error_code=otp_expired dice que el enlace ha caducado', async () => {
+      await abrir(undefined, {
+        error: 'access_denied',
+        error_code: 'otp_expired',
+        error_description: 'Email link is invalid or has expired',
+      });
+
+      expect(texto()).toContain(FALLO_ENLACE_CADUCADO);
+      expect(enlaceEntrar()?.getAttribute('href')).toBe('/entrar');
+      expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+    });
+
+    // Cualquiera puede fabricar un enlace a /auth/confirmar: lo que trae la URL no se enseña nunca.
+    it('no muestra el texto de un ?message= ni de un ?error_description= fabricados', async () => {
+      const falsoAviso = 'Tu cuenta está bloqueada. Llama al 900 000 000 para recuperarla.';
+
+      await abrir(undefined, { message: falsoAviso });
+      expect(texto()).not.toContain(falsoAviso);
+      expect(texto()).toContain(AVISO_PASO_PENDIENTE);
+
+      await abrir(undefined, { error: 'server_error', error_description: falsoAviso });
+      expect(texto()).not.toContain(falsoAviso);
+      expect(texto()).toContain(FALLO_GENERICO);
+
+      await abrir(undefined, { error_description: falsoAviso });
+      expect(texto()).not.toContain(falsoAviso);
+      expect(texto()).toContain(FALLO_GENERICO);
     });
   });
 

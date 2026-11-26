@@ -202,8 +202,10 @@ están en `src/app/app.routes.ts`:
   un token de hCaptcha cuando hay site key y reinician el widget tras cada envío.
 - `/auth/confirmar` y `/auth/nueva-contrasena`: destino de los enlaces de los correos y de la
   vuelta de OAuth (`?code=…`), sin guard. Canjean el `code` PKCE por la sesión. Sin `code`,
-  `/auth/confirmar` muestra tal cual el `?message=` de GoTrue (el primer enlace del cambio de email
-  con confirmación doble) o el `?error_description=` (OAuth cancelado o denegado).
+  `/auth/confirmar` enseña un texto propio según lo que mande GoTrue: el `?message=` (el primer
+  enlace del cambio de email con confirmación doble), `?error=access_denied` (OAuth cancelado o
+  denegado), `?error_code=otp_expired` (enlace caducado) u otro error. Nunca el texto de la URL:
+  cualquiera puede fabricar un enlace con el `?message=` que quiera.
 - `/mis-contactos` («Mis contactos» y «Compartidos conmigo», con búsqueda, la etiqueta del rol y
   el detalle del seleccionado; la selección es `?contacto=`: elegir un contacto, guardarlo tras
   editar y «Volver» desde compartir lo ponen en la URL, «Atrás» y «Adelante» la recorren y sin el

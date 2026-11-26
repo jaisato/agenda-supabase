@@ -4,25 +4,44 @@ import { Router, RouterLink } from '@angular/router';
 import { MensajesService } from '../../mensajes.service';
 import { AuthService } from '../auth.service';
 
+/** `?message=` de GoTrue: el cambio de email con confirmación doble acepta el primer enlace. */
+export const AVISO_PASO_PENDIENTE =
+  'Enlace aceptado. Si estás cambiando el email, abre también el enlace que te hemos enviado al ' +
+  'otro correo para terminar.';
+/** `?error_code=otp_expired`: el enlace del correo ya se usó o ha caducado. */
+export const FALLO_ENLACE_CADUCADO =
+  'El enlace no es válido o ha caducado. Entra con tu email y contraseña o pide otro.';
+/** `?error=access_denied`: la persona canceló en el proveedor OAuth o este denegó el acceso. */
+export const FALLO_ACCESO_DENEGADO =
+  'No se ha iniciado sesión: se canceló el acceso o el proveedor lo denegó.';
+/** Cualquier otro `?error=`. */
+export const FALLO_GENERICO = 'No se ha podido iniciar sesión. Vuelve a intentarlo desde «Entrar».';
+
 /**
  * Destino del enlace del correo, de la vuelta de OAuth y del cambio de email (`/auth/confirmar`,
  * flujo PKCE). Con `?code=…` lo canjea por la sesión. GoTrue también vuelve aquí sin `code`: con
  * `?message=…` cuando falta un paso (el cambio de email con confirmación doble acepta el primer
- * enlace y espera el del otro correo) y con `?error=…&error_description=…` cuando el proveedor
- * OAuth deniega el acceso o la persona cancela. Esos textos se muestran tal cual. Sin nada de eso,
- * o con un code caducado o ya usado, no hay pantalla en blanco: avisa y ofrece volver a «Entrar».
+ * enlace y espera el del otro correo) y con `?error=…&error_code=…&error_description=…` cuando el
+ * proveedor OAuth deniega el acceso, la persona cancela o el enlace del correo ha caducado.
+ *
+ * La página enseña textos propios según esos códigos, nunca el texto de la URL: cualquiera puede
+ * fabricar un enlace a /auth/confirmar con el `?message=` o el `?error_description=` que quiera, y
+ * mostrarlo tal cual ponía en el dominio de la aplicación el mensaje de un tercero (por ejemplo, un
+ * aviso falso con un teléfono o un correo de «soporte»). Sin nada de eso, o con un code caducado o
+ * ya usado, no hay pantalla en blanco: avisa y ofrece volver a «Entrar».
  */
 @Component({
   imports: [RouterLink],
   templateUrl: './confirmar.component.html',
 })
 export class ConfirmarComponent implements OnInit {
-  // Query params, entregados por el router (withComponentInputBinding). GoTrue manda ?error= (el
-  // código, como access_denied) junto a ?error_description= (el texto); se enseña el texto y, si
-  // faltara, el código.
+  // Query params, entregados por el router (withComponentInputBinding). GoTrue manda ?error= (como
+  // access_denied), ?error_code= (como otp_expired) y ?error_description= (el texto en inglés); los
+  // dos códigos eligen el texto propio y la descripción solo cuenta como señal de que hubo error.
   readonly code = input<string>();
   readonly message = input<string>();
   readonly error = input<string>();
+  readonly errorCode = input<string | undefined>(undefined, { alias: 'error_code' });
   readonly errorDescription = input<string | undefined>(undefined, {
     alias: 'error_description',
   });
@@ -32,21 +51,27 @@ export class ConfirmarComponent implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly fallido = signal(false);
-  /** Texto de GoTrue (`?message=`): un paso hecho y otro pendiente. */
+  /** Con `?message=`: un paso hecho y otro pendiente. */
   protected readonly aviso = signal<string | null>(null);
-  /** Texto de GoTrue (`?error_description=`, o `?error=` a falta de él): no hay sesión. */
+  /** Con `?error=`, `?error_code=` o `?error_description=`: no hay sesión. */
   protected readonly fallo = signal<string | null>(null);
 
   // Una sola vez al abrir la página: el code es de un solo uso y un segundo canje fallaría.
   async ngOnInit(): Promise<void> {
     const code = this.code();
     if (!code) {
-      const descripcion = this.errorDescription()?.trim() || this.error()?.trim();
-      const mensaje = this.message()?.trim();
-      if (descripcion) {
-        this.fallo.set(descripcion);
-      } else if (mensaje) {
-        this.aviso.set(mensaje);
+      const error = this.error()?.trim();
+      const codigoError = this.errorCode()?.trim();
+      if (error || codigoError || this.errorDescription()?.trim()) {
+        this.fallo.set(
+          codigoError === 'otp_expired'
+            ? FALLO_ENLACE_CADUCADO
+            : error === 'access_denied'
+              ? FALLO_ACCESO_DENEGADO
+              : FALLO_GENERICO,
+        );
+      } else if (this.message()?.trim()) {
+        this.aviso.set(AVISO_PASO_PENDIENTE);
       } else {
         this.fallido.set(true);
       }
