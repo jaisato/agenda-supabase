@@ -42,7 +42,8 @@ describe('ConfirmarComponent', () => {
   };
   // Lo que en la aplicación entrega el router (withComponentInputBinding) desde ?code=…, ?message=…
   // o ?error_description=… (los nombres son los de la query, como los recibe el componente).
-  const abrir = async (code?: string, query: Record<string, string> = {}) => {
+  // Un parámetro repetido en la URL (?message=a&message=b) llega como array.
+  const abrir = async (code?: string, query: Record<string, string | string[]> = {}) => {
     fixture = TestBed.createComponent(ConfirmarComponent);
     elemento = fixture.nativeElement;
     if (code !== undefined) {
@@ -140,6 +141,18 @@ describe('ConfirmarComponent', () => {
       expect(texto()).not.toContain(falsoAviso);
       expect(texto()).toContain(FALLO_GENERICO);
     });
+
+    // Un enlace fabricado con un parámetro repetido no deja la página en «Confirmando…».
+    it.each(['message', 'error', 'error_code', 'error_description'])(
+      'con ?%s repetido trata el enlace como incompleto',
+      async (nombre) => {
+        await abrir(undefined, { [nombre]: ['a', 'b'] });
+
+        expect(texto()).toContain(noSePudoConfirmar);
+        expect(texto()).not.toContain('Confirmando…');
+        expect(falso.auth.exchangeCodeForSession).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('con code', () => {

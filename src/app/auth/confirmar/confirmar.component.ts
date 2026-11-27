@@ -17,6 +17,10 @@ export const FALLO_ACCESO_DENEGADO =
 /** Cualquier otro `?error=`. */
 export const FALLO_GENERICO = 'No se ha podido iniciar sesión. Vuelve a intentarlo desde «Entrar».';
 
+// Un parámetro repetido (?message=a&message=b) llega del router como array, sin trim(): cuenta
+// como ausente, en vez de lanzar un TypeError que dejaba la página en «Confirmando…».
+const leer = (valor: unknown) => (typeof valor === 'string' ? valor.trim() : '');
+
 /**
  * Destino del enlace del correo, de la vuelta de OAuth y del cambio de email (`/auth/confirmar`,
  * flujo PKCE). Con `?code=…` lo canjea por la sesión. GoTrue también vuelve aquí sin `code`: con
@@ -60,9 +64,9 @@ export class ConfirmarComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     const code = this.code();
     if (!code) {
-      const error = this.error()?.trim();
-      const codigoError = this.errorCode()?.trim();
-      if (error || codigoError || this.errorDescription()?.trim()) {
+      const error = leer(this.error());
+      const codigoError = leer(this.errorCode());
+      if (error || codigoError || leer(this.errorDescription())) {
         this.fallo.set(
           codigoError === 'otp_expired'
             ? FALLO_ENLACE_CADUCADO
@@ -70,7 +74,7 @@ export class ConfirmarComponent implements OnInit {
               ? FALLO_ACCESO_DENEGADO
               : FALLO_GENERICO,
         );
-      } else if (this.message()?.trim()) {
+      } else if (leer(this.message())) {
         this.aviso.set(AVISO_PASO_PENDIENTE);
       } else {
         this.fallido.set(true);
