@@ -39,7 +39,7 @@
     "@sentry/cli": "^3.8.2",
     "jsdom": "^31.0.1",
     "prettier": "^3.10.1",
-    "supabase": "3.3.0",
+    "supabase": "3.4.0",
     "typescript": "~6.0.2",
     "vitest": "^5.1.0"
   },
