@@ -4,12 +4,12 @@
     <h4>Confirmación</h4>
     @if (aviso(); as texto) {
       <!-- ?message= de GoTrue: el cambio de email con confirmación doble acepta el primer enlace y
-           espera el del otro correo. No es un error. -->
+           espera el del otro correo. No es un error. El texto es propio, no el de la URL. -->
       <p>{{ texto }}</p>
       <a class="button button-primary" routerLink="/mis-contactos">Volver a la agenda</a>
     } @else if (fallo(); as texto) {
-      <!-- ?error=&error_description= de GoTrue: el proveedor OAuth ha denegado el acceso o la
-           persona ha cancelado -->
+      <!-- ?error=&error_code=&error_description= de GoTrue: el proveedor OAuth ha denegado el
+           acceso, la persona ha cancelado o el enlace del correo ha caducado. Texto propio. -->
       <p>{{ texto }}</p>
       <a class="button button-primary" routerLink="/entrar">Entrar</a>
     } @else if (fallido()) {
